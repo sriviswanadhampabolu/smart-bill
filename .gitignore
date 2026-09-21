@@ -1,0 +1,42 @@
+# Android & Gradle
+.gradle/
+**/build/
+build/
+*.iml
+.idea/
+local.properties
+captures/
+.externalNativeBuild/
+.cxx/
+
+# Python & Backend
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.pytest_cache/
+.coverage
+htmlcov/
+*.db
+backend/.env
+.env
+
+# Cloud, Agents & Configs
+.neon*
+.agents/
+skills-lock.json
+neon.ts
+package.json
+package-lock.json
+.env*
+node_modules/
+
+# OS & Temp
+.DS_Store
+Thumbs.db
+*.log
+
+# Loose build files in root (APK in release/ is tracked)
+/*.apk
+!release/*.apk
+output-metadata.json

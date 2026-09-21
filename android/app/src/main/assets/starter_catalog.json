@@ -1,0 +1,712 @@
+[
+  {
+    "id": "starter_atta_aashirvaad_5kg",
+    "name": "Aashirvaad Shudh Chakki Atta 5kg",
+    "name_regional": "आशीर्वाद आटा ५ कि.ग्रा.",
+    "category": "Staples",
+    "unit_type": "piece",
+    "suggested_price": 245.0,
+    "default_threshold": 5.0,
+    "barcode": "8901725131018"
+  },
+  {
+    "id": "starter_oil_fortune_sunflower_1l",
+    "name": "Fortune Sunlite Refined Sunflower Oil 1L",
+    "name_regional": "फॉर्च्यून सनफ्लावर तेल १ ली.",
+    "category": "Staples",
+    "unit_type": "piece",
+    "suggested_price": 145.0,
+    "default_threshold": 6.0,
+    "barcode": "8906007281014"
+  },
+  {
+    "id": "starter_rice_sona_masoori",
+    "name": "Sona Masoori Rice (Loose)",
+    "name_regional": "सोना मसूरी चावल (खुला)",
+    "category": "Staples",
+    "unit_type": "weight",
+    "suggested_price": 60.0,
+    "default_threshold": 25.0,
+    "barcode": null
+  },
+  {
+    "id": "starter_rice_india_gate_basmati_1kg",
+    "name": "India Gate Basmati Rice 1kg",
+    "name_regional": "इंडिया गेट बासमती चावल १ कि.ग्रा.",
+    "category": "Staples",
+    "unit_type": "piece",
+    "suggested_price": 130.0,
+    "default_threshold": 4.0,
+    "barcode": "8901262010114"
+  },
+  {
+    "id": "starter_salt_tata_1kg",
+    "name": "Tata Salt Vacuum Evaporated 1kg",
+    "name_regional": "टाटा नमक १ कि.ग्रा.",
+    "category": "Staples",
+    "unit_type": "piece",
+    "suggested_price": 28.0,
+    "default_threshold": 10.0,
+    "barcode": "8901030383789"
+  },
+  {
+    "id": "starter_sugar_loose",
+    "name": "White Crystal Sugar (Loose)",
+    "name_regional": "सफेद चीनी (खुली)",
+    "category": "Staples",
+    "unit_type": "weight",
+    "suggested_price": 44.0,
+    "default_threshold": 20.0,
+    "barcode": null
+  },
+  {
+    "id": "starter_dal_toor_loose",
+    "name": "Toor Dal / Arhar Dal (Loose)",
+    "name_regional": "तूर दाल / अरहर दाल",
+    "category": "Staples",
+    "unit_type": "weight",
+    "suggested_price": 165.0,
+    "default_threshold": 15.0,
+    "barcode": null
+  },
+  {
+    "id": "starter_dal_moong_500g",
+    "name": "Tata Sampann Moong Dal 500g",
+    "name_regional": "मूंग दाल ५०० ग्रा.",
+    "category": "Staples",
+    "unit_type": "piece",
+    "suggested_price": 85.0,
+    "default_threshold": 5.0,
+    "barcode": "8901030784112"
+  },
+  {
+    "id": "starter_dal_chana_loose",
+    "name": "Chana Dal (Loose)",
+    "name_regional": "चना दाल (खुली)",
+    "category": "Staples",
+    "unit_type": "weight",
+    "suggested_price": 95.0,
+    "default_threshold": 10.0,
+    "barcode": null
+  },
+  {
+    "id": "starter_maida_1kg",
+    "name": "Refined Wheat Flour Maida 1kg",
+    "name_regional": "मैदा १ कि.ग्रा.",
+    "category": "Staples",
+    "unit_type": "piece",
+    "suggested_price": 45.0,
+    "default_threshold": 5.0,
+    "barcode": "8904004400114"
+  },
+  {
+    "id": "starter_turmeric_everest_100g",
+    "name": "Everest Turmeric Powder 100g",
+    "name_regional": "एवरेस्ट हल्दी पाउडर १०० ग्रा.",
+    "category": "Spices",
+    "unit_type": "piece",
+    "suggested_price": 34.0,
+    "default_threshold": 8.0,
+    "barcode": "8901786101111"
+  },
+  {
+    "id": "starter_chilli_mdh_deggi_100g",
+    "name": "MDH Deggi Mirch 100g",
+    "name_regional": "एमडीएच देगी मिर्च १०० ग्रा.",
+    "category": "Spices",
+    "unit_type": "piece",
+    "suggested_price": 86.0,
+    "default_threshold": 6.0,
+    "barcode": "8901082001114"
+  },
+  {
+    "id": "starter_coriander_sampann_100g",
+    "name": "Tata Sampann Coriander Powder 100g",
+    "name_regional": "टाटा सम्पन्न धनिया पाउडर १०० ग्रा.",
+    "category": "Spices",
+    "unit_type": "piece",
+    "suggested_price": 38.0,
+    "default_threshold": 6.0,
+    "barcode": "8901030801116"
+  },
+  {
+    "id": "starter_garam_masala_catch_100g",
+    "name": "Catch Super Garam Masala 100g",
+    "name_regional": "कैच गरम मसाला १०० ग्रा.",
+    "category": "Spices",
+    "unit_type": "piece",
+    "suggested_price": 95.0,
+    "default_threshold": 5.0,
+    "barcode": "8901192101112"
+  },
+  {
+    "id": "starter_mustard_rai_100g",
+    "name": "Mustard Seeds Rai 100g",
+    "name_regional": "राई / सरसों १०० ग्रा.",
+    "category": "Spices",
+    "unit_type": "piece",
+    "suggested_price": 20.0,
+    "default_threshold": 10.0,
+    "barcode": null
+  },
+  {
+    "id": "starter_cumin_jeera_100g",
+    "name": "Cumin Seeds Jeera 100g",
+    "name_regional": "जीरा १०० ग्रा.",
+    "category": "Spices",
+    "unit_type": "piece",
+    "suggested_price": 45.0,
+    "default_threshold": 10.0,
+    "barcode": null
+  },
+  {
+    "id": "starter_biscuit_parle_g_100g",
+    "name": "Parle-G Original Glucose 100g",
+    "name_regional": "पारले-जी बिस्कुट १०० ग्रा.",
+    "category": "Snacks",
+    "unit_type": "piece",
+    "suggested_price": 10.0,
+    "default_threshold": 20.0,
+    "barcode": "8901719101010"
+  },
+  {
+    "id": "starter_biscuit_good_day_100g",
+    "name": "Britannia Good Day Butter 100g",
+    "name_regional": "ब्रिटानिया गुड डे बटर १०० ग्रा.",
+    "category": "Snacks",
+    "unit_type": "piece",
+    "suggested_price": 25.0,
+    "default_threshold": 15.0,
+    "barcode": "8901063101115"
+  },
+  {
+    "id": "starter_noodles_maggi_70g",
+    "name": "Maggi 2-Minute Masala Noodles 70g",
+    "name_regional": "मैगी २-मिनट नूडल्स ७० ग्रा.",
+    "category": "Snacks",
+    "unit_type": "piece",
+    "suggested_price": 14.0,
+    "default_threshold": 24.0,
+    "barcode": "8901058852397"
+  },
+  {
+    "id": "starter_chips_lays_magic_masala_50g",
+    "name": "Lay's India's Magic Masala 50g",
+    "name_regional": "लेज़ मैजिक मसाला ५० ग्रा.",
+    "category": "Snacks",
+    "unit_type": "piece",
+    "suggested_price": 20.0,
+    "default_threshold": 15.0,
+    "barcode": "8901491101118"
+  },
+  {
+    "id": "starter_namkeen_kurkure_90g",
+    "name": "Kurkure Masala Munch 90g",
+    "name_regional": "कुरकुरे मसाला मंच ९० ग्रा.",
+    "category": "Snacks",
+    "unit_type": "piece",
+    "suggested_price": 20.0,
+    "default_threshold": 12.0,
+    "barcode": "8901491501116"
+  },
+  {
+    "id": "starter_namkeen_haldiram_bhujia_150g",
+    "name": "Haldiram's Nagpur Aloo Bhujia 150g",
+    "name_regional": "हल्दीराम आलू भुजिया १५० ग्रा.",
+    "category": "Snacks",
+    "unit_type": "piece",
+    "suggested_price": 55.0,
+    "default_threshold": 10.0,
+    "barcode": "8904004402118"
+  },
+  {
+    "id": "starter_biscuit_oreo_120g",
+    "name": "Cadbury Oreo Vanilla Biscuit 120g",
+    "name_regional": "ओरियो वेनिला बिस्कुट १२० ग्रा.",
+    "category": "Snacks",
+    "unit_type": "piece",
+    "suggested_price": 35.0,
+    "default_threshold": 10.0,
+    "barcode": "8901233011114"
+  },
+  {
+    "id": "starter_biscuit_dark_fantasy_75g",
+    "name": "Sunfeast Dark Fantasy Choco Fills 75g",
+    "name_regional": "डार्क फैंटेसी चोको फिल्स ७५ ग्रा.",
+    "category": "Snacks",
+    "unit_type": "piece",
+    "suggested_price": 40.0,
+    "default_threshold": 8.0,
+    "barcode": "8901725101110"
+  },
+  {
+    "id": "starter_butter_amul_100g",
+    "name": "Amul Pasteurised Butter 100g",
+    "name_regional": "अमुल बटर १०० ग्रा.",
+    "category": "Dairy",
+    "unit_type": "piece",
+    "suggested_price": 58.0,
+    "default_threshold": 8.0,
+    "barcode": "8901262010115"
+  },
+  {
+    "id": "starter_milk_amul_taaza_500ml",
+    "name": "Amul Taaza Homogenised Milk 500ml",
+    "name_regional": "अमुल ताज़ा दूध ५०० मि.ली.",
+    "category": "Dairy",
+    "unit_type": "piece",
+    "suggested_price": 27.0,
+    "default_threshold": 12.0,
+    "barcode": "8901262012119"
+  },
+  {
+    "id": "starter_cheese_amul_slices_200g",
+    "name": "Amul Processed Cheese Slices 200g",
+    "name_regional": "अमुल चीज़ स्लाइस २०० ग्रा.",
+    "category": "Dairy",
+    "unit_type": "piece",
+    "suggested_price": 140.0,
+    "default_threshold": 4.0,
+    "barcode": "8901262015110"
+  },
+  {
+    "id": "starter_paneer_mother_dairy_200g",
+    "name": "Mother Dairy Classic Paneer 200g",
+    "name_regional": "मदर डेयरी पनीर २०० ग्रा.",
+    "category": "Dairy",
+    "unit_type": "piece",
+    "suggested_price": 92.0,
+    "default_threshold": 5.0,
+    "barcode": "8901648010112"
+  },
+  {
+    "id": "starter_detergent_surf_excel_1kg",
+    "name": "Surf Excel Easy Wash Detergent Powder 1kg",
+    "name_regional": "सर्फ एक्सेल इजी वॉश १ कि.ग्रा.",
+    "category": "Household",
+    "unit_type": "piece",
+    "suggested_price": 140.0,
+    "default_threshold": 6.0,
+    "barcode": "8901030381013"
+  },
+  {
+    "id": "starter_bar_rin_250g",
+    "name": "Rin Detergent Bar 250g",
+    "name_regional": "रिन साबुन २५० ग्रा.",
+    "category": "Household",
+    "unit_type": "piece",
+    "suggested_price": 20.0,
+    "default_threshold": 15.0,
+    "barcode": "8901030382010"
+  },
+  {
+    "id": "starter_dishwash_vim_bar_300g",
+    "name": "Vim Dishwash Bar with Lemon 300g",
+    "name_regional": "विम डिशवॉश बार ३०० ग्रा.",
+    "category": "Household",
+    "unit_type": "piece",
+    "suggested_price": 25.0,
+    "default_threshold": 15.0,
+    "barcode": "8901030383017"
+  },
+  {
+    "id": "starter_cleaner_harpic_500ml",
+    "name": "Harpic Power Plus Toilet Cleaner 500ml",
+    "name_regional": "हार्पिक टॉयलेट क्लीनर ५०० मि.ली.",
+    "category": "Household",
+    "unit_type": "piece",
+    "suggested_price": 93.0,
+    "default_threshold": 6.0,
+    "barcode": "8901396101016"
+  },
+  {
+    "id": "starter_mosquito_good_knight_refill",
+    "name": "Good Knight Gold Flash Liquid Refill",
+    "name_regional": "गुड नाइट गोल्ड फ्लैश लिक्विड",
+    "category": "Household",
+    "unit_type": "piece",
+    "suggested_price": 85.0,
+    "default_threshold": 8.0,
+    "barcode": "8901023010114"
+  },
+  {
+    "id": "starter_dettol_liquid_100ml",
+    "name": "Dettol Antiseptic Disinfectant Liquid 100ml",
+    "name_regional": "डेटॉल एंटीसेप्टिक लिक्विड १०० मि.ली.",
+    "category": "Personal Care",
+    "unit_type": "piece",
+    "suggested_price": 42.0,
+    "default_threshold": 6.0,
+    "barcode": "8901396301010"
+  },
+  {
+    "id": "starter_soap_lifebuoy_125g",
+    "name": "Lifebuoy Total Germ Protection Soap 125g",
+    "name_regional": "लाइफबॉय साबुन १२५ ग्रा.",
+    "category": "Personal Care",
+    "unit_type": "piece",
+    "suggested_price": 38.0,
+    "default_threshold": 12.0,
+    "barcode": "8901030010111"
+  },
+  {
+    "id": "starter_toothpaste_colgate_150g",
+    "name": "Colgate Strong Teeth Dental Cream 150g",
+    "name_regional": "कोलगेट टूथपेस्ट १५० ग्रा.",
+    "category": "Personal Care",
+    "unit_type": "piece",
+    "suggested_price": 105.0,
+    "default_threshold": 8.0,
+    "barcode": "8901314010115"
+  },
+  {
+    "id": "starter_oil_parachute_200ml",
+    "name": "Parachute 100% Pure Coconut Oil 200ml",
+    "name_regional": "पैराशूट नारियल तेल २०० मि.ली.",
+    "category": "Personal Care",
+    "unit_type": "piece",
+    "suggested_price": 95.0,
+    "default_threshold": 8.0,
+    "barcode": "8901088010116"
+  },
+  {
+    "id": "starter_shampoo_head_shoulders_180ml",
+    "name": "Head & Shoulders Anti-Dandruff 180ml",
+    "name_regional": "हेड एंड शोल्डर्स शैम्पू १८० मि.ली.",
+    "category": "Personal Care",
+    "unit_type": "piece",
+    "suggested_price": 185.0,
+    "default_threshold": 5.0,
+    "barcode": "8901314510119"
+  },
+  {
+    "id": "starter_shampoo_clinic_plus_175ml",
+    "name": "Clinic Plus Strong & Long Shampoo 175ml",
+    "name_regional": "क्लिनिक प्लस शैम्पू १७५ मि.ली.",
+    "category": "Personal Care",
+    "unit_type": "piece",
+    "suggested_price": 120.0,
+    "default_threshold": 6.0,
+    "barcode": "8901030710111"
+  },
+  {
+    "id": "starter_soap_lux_100g",
+    "name": "Lux Rose & Vitamin E Soap 100g",
+    "name_regional": "लक्स साबुन १०० ग्रा.",
+    "category": "Personal Care",
+    "unit_type": "piece",
+    "suggested_price": 32.0,
+    "default_threshold": 12.0,
+    "barcode": "8901030381014"
+  },
+  {
+    "id": "starter_choc_dairy_milk_13g",
+    "name": "Cadbury Dairy Milk Chocolate 13.2g",
+    "name_regional": "कैडबरी डेयरी मिल्क चॉकलेट",
+    "category": "Chocolates",
+    "unit_type": "piece",
+    "suggested_price": 10.0,
+    "default_threshold": 30.0,
+    "barcode": "8901233020017"
+  },
+  {
+    "id": "starter_choc_dairy_milk_silk_60g",
+    "name": "Cadbury Dairy Milk Silk 60g",
+    "name_regional": "डेयरी मिल्क सिल्क ६० ग्रा.",
+    "category": "Chocolates",
+    "unit_type": "piece",
+    "suggested_price": 80.0,
+    "default_threshold": 12.0,
+    "barcode": "8901233022011"
+  },
+  {
+    "id": "starter_choc_kitkat_38g",
+    "name": "Nestlé KitKat 4 Finger 38.5g",
+    "name_regional": "नेस्ले किटकैट ३८.५ ग्रा.",
+    "category": "Chocolates",
+    "unit_type": "piece",
+    "suggested_price": 30.0,
+    "default_threshold": 20.0,
+    "barcode": "8901058853110"
+  },
+  {
+    "id": "starter_choc_munch_18g",
+    "name": "Nestlé Munch Chocolate Wafer 18g",
+    "name_regional": "नेस्ले मंच १८ ग्रा.",
+    "category": "Chocolates",
+    "unit_type": "piece",
+    "suggested_price": 10.0,
+    "default_threshold": 30.0,
+    "barcode": "8901058854117"
+  },
+  {
+    "id": "starter_choc_5star_20g",
+    "name": "Cadbury 5 Star Chocolate Bar 19.5g",
+    "name_regional": "कैडबरी ५ स्टार २० ग्रा.",
+    "category": "Chocolates",
+    "unit_type": "piece",
+    "suggested_price": 10.0,
+    "default_threshold": 25.0,
+    "barcode": "8901233023018"
+  },
+  {
+    "id": "starter_choc_perk_13g",
+    "name": "Cadbury Perk Chocolate Wafer 13g",
+    "name_regional": "कैडबरी पर्क १३ ग्रा.",
+    "category": "Chocolates",
+    "unit_type": "piece",
+    "suggested_price": 5.0,
+    "default_threshold": 40.0,
+    "barcode": "8901233024015"
+  },
+  {
+    "id": "starter_choc_snickers_40g",
+    "name": "Snickers Peanut Chocolate Bar 40g",
+    "name_regional": "स्निकर्स चॉकलेट बार ४० ग्रा.",
+    "category": "Chocolates",
+    "unit_type": "piece",
+    "suggested_price": 40.0,
+    "default_threshold": 15.0,
+    "barcode": "8901499010016"
+  },
+  {
+    "id": "starter_choc_amul_dark_150g",
+    "name": "Amul 55% Rich Dark Chocolate 150g",
+    "name_regional": "अमुल डार्क चॉकलेट १५० ग्रा.",
+    "category": "Chocolates",
+    "unit_type": "piece",
+    "suggested_price": 110.0,
+    "default_threshold": 6.0,
+    "barcode": "8901262018012"
+  },
+  {
+    "id": "starter_bisc_marie_gold_250g",
+    "name": "Britannia Marie Gold Biscuit 250g",
+    "name_regional": "ब्रिटानिया मैरी गोल्ड २५० ग्रा.",
+    "category": "Biscuits",
+    "unit_type": "piece",
+    "suggested_price": 35.0,
+    "default_threshold": 20.0,
+    "barcode": "8901063102013"
+  },
+  {
+    "id": "starter_bisc_hide_seek_120g",
+    "name": "Parle Hide & Seek Choco Chip 120g",
+    "name_regional": "पारले हाइड एंड सीक १२० ग्रा.",
+    "category": "Biscuits",
+    "unit_type": "piece",
+    "suggested_price": 35.0,
+    "default_threshold": 15.0,
+    "barcode": "8901719102017"
+  },
+  {
+    "id": "starter_bisc_bourbon_150g",
+    "name": "Britannia Bourbon Chocolate Cream 150g",
+    "name_regional": "ब्रिटानिया बॉर्नबॉन १५० ग्रा.",
+    "category": "Biscuits",
+    "unit_type": "piece",
+    "suggested_price": 35.0,
+    "default_threshold": 15.0,
+    "barcode": "8901063103010"
+  },
+  {
+    "id": "starter_bisc_tiger_100g",
+    "name": "Britannia Tiger Krunch Glucose 100g",
+    "name_regional": "ब्रिटानिया टाइगर १०० ग्रा.",
+    "category": "Biscuits",
+    "unit_type": "piece",
+    "suggested_price": 10.0,
+    "default_threshold": 25.0,
+    "barcode": "8901063104017"
+  },
+  {
+    "id": "starter_bisc_monaco_75g",
+    "name": "Parle Monaco Classic Salted 75g",
+    "name_regional": "पारले मोनाको साल्टेड ७५ ग्रा.",
+    "category": "Biscuits",
+    "unit_type": "piece",
+    "suggested_price": 10.0,
+    "default_threshold": 25.0,
+    "barcode": "8901719103014"
+  },
+  {
+    "id": "starter_bisc_krackjack_60g",
+    "name": "Parle Krackjack Sweet & Salty 60g",
+    "name_regional": "पारले क्रैकजैक ६० ग्रा.",
+    "category": "Biscuits",
+    "unit_type": "piece",
+    "suggested_price": 10.0,
+    "default_threshold": 25.0,
+    "barcode": "8901719104011"
+  },
+  {
+    "id": "starter_bisc_jim_jam_100g",
+    "name": "Britannia Treat Jim Jam 100g",
+    "name_regional": "ब्रिटानिया जिम जैम १०० ग्रा.",
+    "category": "Biscuits",
+    "unit_type": "piece",
+    "suggested_price": 25.0,
+    "default_threshold": 15.0,
+    "barcode": "8901063105014"
+  },
+  {
+    "id": "starter_stat_classmate_single_line_172",
+    "name": "Classmate Notebook Single Line (172 pgs)",
+    "name_regional": "क्लासमेट नोटबुक सिंगल लाइन",
+    "category": "Stationery",
+    "unit_type": "piece",
+    "suggested_price": 45.0,
+    "default_threshold": 20.0,
+    "barcode": "8901725010016"
+  },
+  {
+    "id": "starter_stat_classmate_long_book_160",
+    "name": "Classmate Long Book Ruled (160 pgs)",
+    "name_regional": "क्लासमेट लॉन्ग बुक १६० पेज",
+    "category": "Stationery",
+    "unit_type": "piece",
+    "suggested_price": 60.0,
+    "default_threshold": 15.0,
+    "barcode": "8901725011013"
+  },
+  {
+    "id": "starter_stat_classmate_spiral_200",
+    "name": "Classmate Spiral Bound Notebook (200 pgs)",
+    "name_regional": "क्लासमेट स्पाइरल नोटबुक २०० पेज",
+    "category": "Stationery",
+    "unit_type": "piece",
+    "suggested_price": 90.0,
+    "default_threshold": 10.0,
+    "barcode": "8901725012010"
+  },
+  {
+    "id": "starter_stat_drawing_book_36",
+    "name": "Student Drawing Book Medium (36 pgs)",
+    "name_regional": "ड्राइंग बुक ३६ पेज",
+    "category": "Stationery",
+    "unit_type": "piece",
+    "suggested_price": 40.0,
+    "default_threshold": 15.0,
+    "barcode": "8901725013017"
+  },
+  {
+    "id": "starter_stat_pen_reynolds_045_blue",
+    "name": "Reynolds 045 Fine Carbure Blue Ball Pen",
+    "name_regional": "रेनॉल्ड्स ०४५ बॉल पेन नीला",
+    "category": "Stationery",
+    "unit_type": "piece",
+    "suggested_price": 10.0,
+    "default_threshold": 50.0,
+    "barcode": "8901199010012"
+  },
+  {
+    "id": "starter_stat_pen_cello_butterflow_blue",
+    "name": "Cello Butterflow Classic Blue Ball Pen",
+    "name_regional": "सेलो बटरफ्लो बॉल पेन नीला",
+    "category": "Stationery",
+    "unit_type": "piece",
+    "suggested_price": 10.0,
+    "default_threshold": 50.0,
+    "barcode": "8901425010011"
+  },
+  {
+    "id": "starter_stat_pen_pentonic_black",
+    "name": "Linc Pentonic Ball Pen 0.7mm Black",
+    "name_regional": "पेंटोनिक बॉल पेन काला",
+    "category": "Stationery",
+    "unit_type": "piece",
+    "suggested_price": 10.0,
+    "default_threshold": 40.0,
+    "barcode": "8901323010014"
+  },
+  {
+    "id": "starter_stat_pen_hauser_xo_blue",
+    "name": "Hauser XO 0.6mm Extra Dark Blue Pen",
+    "name_regional": "हॉसर एक्सओ बॉल पेन",
+    "category": "Stationery",
+    "unit_type": "piece",
+    "suggested_price": 10.0,
+    "default_threshold": 40.0,
+    "barcode": "8904128010015"
+  },
+  {
+    "id": "starter_stat_pen_pilot_v5_blue",
+    "name": "Pilot V5 Hi-Tecpoint 0.5mm Roller Pen",
+    "name_regional": "पायलट वी५ पेन",
+    "category": "Stationery",
+    "unit_type": "piece",
+    "suggested_price": 60.0,
+    "default_threshold": 12.0,
+    "barcode": "4902505085444"
+  },
+  {
+    "id": "starter_stat_pencils_apsara_pack10",
+    "name": "Apsara Platinum Extra Dark Pencils (10 Pack)",
+    "name_regional": "अप्सरा प्लैटिनम पेंसिल (१० का पैकेट)",
+    "category": "Stationery",
+    "unit_type": "piece",
+    "suggested_price": 60.0,
+    "default_threshold": 15.0,
+    "barcode": "8901324010013"
+  },
+  {
+    "id": "starter_stat_nataraj_eraser_sharpener",
+    "name": "Nataraj 621 Ruby Eraser & Sharpener Set",
+    "name_regional": "नटराज रबर व शार्पनर सेट",
+    "category": "Stationery",
+    "unit_type": "piece",
+    "suggested_price": 10.0,
+    "default_threshold": 30.0,
+    "barcode": "8901324020012"
+  },
+  {
+    "id": "starter_stat_camlin_geometry_box",
+    "name": "Camlin Kokuyo Exam Geometry Box",
+    "name_regional": "कैमलिन ज्योमेट्री बॉक्स",
+    "category": "Stationery",
+    "unit_type": "piece",
+    "suggested_price": 125.0,
+    "default_threshold": 8.0,
+    "barcode": "8901425030019"
+  },
+  {
+    "id": "starter_stat_fevicol_mr_50g",
+    "name": "Fevicol MR Squeezy Glue Bottle 50g",
+    "name_regional": "फेविकोल ५० ग्रा.",
+    "category": "Stationery",
+    "unit_type": "piece",
+    "suggested_price": 25.0,
+    "default_threshold": 20.0,
+    "barcode": "8901860010014"
+  },
+  {
+    "id": "starter_stat_doms_oil_pastels_24",
+    "name": "Doms 24 Shades Oil Pastels with Scraper",
+    "name_regional": "डोम्स २४ शेड्स ऑयल पेस्टल्स",
+    "category": "Stationery",
+    "unit_type": "piece",
+    "suggested_price": 90.0,
+    "default_threshold": 10.0,
+    "barcode": "8908001010016"
+  },
+  {
+    "id": "starter_stat_stapler_kangaro_10",
+    "name": "Kangaro No. 10 Mini Stapler with 1000 Pins",
+    "name_regional": "कंगारू १० स्टेपलर पिन सहित",
+    "category": "Stationery",
+    "unit_type": "piece",
+    "suggested_price": 65.0,
+    "default_threshold": 8.0,
+    "barcode": "8901425040018"
+  },
+  {
+    "id": "starter_stat_a4_paper_pack_100",
+    "name": "JK Copier A4 Paper 75 GSM (100 Sheets)",
+    "name_regional": "ए४ फोटोकॉपी पेपर १०० शीट",
+    "category": "Stationery",
+    "unit_type": "piece",
+    "suggested_price": 70.0,
+    "default_threshold": 12.0,
+    "barcode": "8901725020015"
+  }
+]
