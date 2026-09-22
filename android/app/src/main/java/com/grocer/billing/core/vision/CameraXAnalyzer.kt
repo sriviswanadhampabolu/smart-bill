@@ -82,8 +82,29 @@ class CameraXAnalyzer(
                 }
 
                 // 3. Visual Embedding Extraction for trained products & unpackaged goods
-                val queryVector = embedder.extractEmbedding(croppedBitmap)
-                val visualMatches = vectorCache.match(queryVector, topK = 3)
+                // Evaluate both standard reticle crop and a tight foreground crop (0.48f)
+                // The tight crop isolates the item from table/hands/background for maximum recognition reliability
+                val queryVectorReticle = embedder.extractEmbedding(croppedBitmap)
+                val matchesReticle = vectorCache.match(queryVectorReticle, topK = 3)
+
+                val tightSize = (minOf(finalBitmap.width, finalBitmap.height) * 0.48f).toInt()
+                val tightStartX = ((finalBitmap.width - tightSize) / 2).coerceAtLeast(0)
+                val tightStartY = ((finalBitmap.height - tightSize) / 2).coerceAtLeast(0)
+                val safeTightW = tightSize.coerceAtMost(finalBitmap.width - tightStartX)
+                val safeTightH = tightSize.coerceAtMost(finalBitmap.height - tightStartY)
+                val tightBitmap = Bitmap.createBitmap(finalBitmap, tightStartX, tightStartY, safeTightW, safeTightH)
+                val queryVectorTight = embedder.extractEmbedding(tightBitmap)
+                val matchesTight = vectorCache.match(queryVectorTight, topK = 3)
+
+                // Combine multi-crop candidates taking the highest confidence score per item
+                val bestScoreMap = mutableMapOf<String, RecognitionMatch>()
+                for (match in (matchesReticle + matchesTight)) {
+                    val current = bestScoreMap[match.item.id]
+                    if (current == null || match.confidence > current.confidence) {
+                        bestScoreMap[match.item.id] = match
+                    }
+                }
+                val visualMatches = bestScoreMap.values.sortedByDescending { it.confidence }.take(3)
 
                 val combinedMatches = if (barcodeMatch != null) {
                     listOf(barcodeMatch) + visualMatches.filter { it.item.id != barcodeMatch.item.id }

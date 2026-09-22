@@ -14,6 +14,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import com.grocer.billing.core.data.local.entities.ItemEntity
 import com.grocer.billing.core.data.repository.ItemRepository
 import com.grocer.billing.ui.theme.GreenPrimary
 import kotlinx.coroutines.launch
@@ -25,14 +26,17 @@ val CATEGORIES = listOf("Staples", "Spices", "Snacks", "Chocolates", "Biscuits",
 fun AddItemDialog(
     shopId: String,
     itemRepository: ItemRepository,
+    initialCategory: String = CATEGORIES.first(),
     onDismiss: () -> Unit,
-    onItemAdded: () -> Unit
+    onItemAdded: (ItemEntity) -> Unit = {}
 ) {
     val coroutineScope = rememberCoroutineScope()
 
     var name by remember { mutableStateOf("") }
     var nameRegional by remember { mutableStateOf("") }
-    var category by remember { mutableStateOf(CATEGORIES.first()) }
+    var category by remember(initialCategory) {
+        mutableStateOf(if (initialCategory in CATEGORIES) initialCategory else CATEGORIES.first())
+    }
     var unitType by remember { mutableStateOf("piece") } // 'piece' or 'weight'
     var priceStr by remember { mutableStateOf("") }
     var stockQtyStr by remember { mutableStateOf("") }
@@ -197,7 +201,7 @@ fun AddItemDialog(
                             isSaving = true
                             coroutineScope.launch {
                                 try {
-                                    itemRepository.addItem(
+                                    val newItem = itemRepository.addItem(
                                         shopId = shopId,
                                         name = name,
                                         nameRegional = nameRegional,
@@ -208,7 +212,7 @@ fun AddItemDialog(
                                         stockQty = stockQty,
                                         lowStockThreshold = threshold
                                     )
-                                    onItemAdded()
+                                    onItemAdded(newItem)
                                     onDismiss()
                                 } catch (e: Exception) {
                                     errorMessage = "Error saving item: ${e.localizedMessage}"

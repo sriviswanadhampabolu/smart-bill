@@ -44,6 +44,13 @@ fun InventoryScreen(
     var restockItem by remember { mutableStateOf<ItemEntity?>(null) }
     var itemToTrainPhotos by remember { mutableStateOf<ItemEntity?>(null) }
 
+    var effectiveShopId by remember(shopId) { mutableStateOf(shopId) }
+    LaunchedEffect(shopId) {
+        if (effectiveShopId.isBlank()) {
+            effectiveShopId = itemRepository.getActiveShopId() ?: ""
+        }
+    }
+
     LaunchedEffect(itemToTrainPhotos) {
         itemToTrainPhotos?.let {
             onNavigateToTrainPhotos(it)
@@ -52,7 +59,7 @@ fun InventoryScreen(
     }
 
     // Observe all items sorted by lowest stock first
-    val allItems by itemRepository.observeItems(shopId, lowestStockFirst = true)
+    val allItems by itemRepository.observeItems(effectiveShopId, lowestStockFirst = true)
         .collectAsState(initial = emptyList())
 
     val filteredItems = remember(allItems, searchQuery, selectedCategory) {
@@ -199,10 +206,17 @@ fun InventoryScreen(
 
     if (showAddDialog) {
         AddItemDialog(
-            shopId = shopId,
+            shopId = effectiveShopId,
             itemRepository = itemRepository,
+            initialCategory = if (selectedCategory != "All") selectedCategory else CATEGORIES.first(),
             onDismiss = { showAddDialog = false },
-            onItemAdded = { showAddDialog = false }
+            onItemAdded = { newItem: ItemEntity ->
+                showAddDialog = false
+                // If current filter hides the newly added item, switch to "All" so user immediately sees it
+                if (selectedCategory != "All" && !selectedCategory.equals(newItem.category, ignoreCase = true)) {
+                    selectedCategory = "All"
+                }
+            }
         )
     }
 

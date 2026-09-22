@@ -50,8 +50,8 @@ class MainActivity : ComponentActivity() {
                 val navController = rememberNavController()
                 val isUserLoggedIn = remember { authRepo.isUserLoggedIn() }
                 val isAppLocked = remember { authRepo.isAppLocked() }
-                val isOnboardingDone = remember { onboardingRepo.isOnboardingCompleted() }
-                val activeShop by shopRepo.observeShop().collectAsState(initial = null)
+                val activeShop by authRepo.observeActiveShop().collectAsState(initial = null)
+                val currentShopId = activeShop?.id ?: authRepo.getActiveShopId() ?: ""
 
                 val startDestination = when {
                     !isUserLoggedIn -> "auth"
@@ -122,7 +122,7 @@ class MainActivity : ComponentActivity() {
 
                     composable("dashboard") {
                         val shop = activeShop
-                        val shopId = shop?.id ?: ""
+                        val shopId = currentShopId.ifBlank { shop?.id ?: "" }
                         val todaySales by billingRepo.observeTodaySales(shopId).collectAsState(initial = 0.0)
                         val todayBillsCount by billingRepo.observeTodayBillsCount(shopId).collectAsState(initial = 0)
                         val lowStockItems by itemRepo.observeLowStockAlerts(shopId).collectAsState(initial = emptyList())
@@ -157,8 +157,9 @@ class MainActivity : ComponentActivity() {
 
                     composable("camera_billing") {
                         val shop = activeShop
+                        val shopId = currentShopId.ifBlank { shop?.id ?: "" }
                         com.grocer.billing.feature.billing.CameraBillingScreen(
-                            shopId = shop?.id ?: "",
+                            shopId = shopId,
                             shopName = shop?.name ?: "Smart Bill",
                             currencySymbol = shop?.currencySymbol ?: "₹",
                             embedder = app.imageEmbedder,
@@ -173,8 +174,9 @@ class MainActivity : ComponentActivity() {
 
                     composable("inventory") {
                         val shop = activeShop
+                        val shopId = currentShopId.ifBlank { shop?.id ?: "" }
                         InventoryScreen(
-                            shopId = shop?.id ?: "",
+                            shopId = shopId,
                             itemRepository = itemRepo,
                             onboardingRepository = onboardingRepo,
                             onNavigateBack = { navController.popBackStack() },

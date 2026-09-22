@@ -10,13 +10,19 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface ShopDao {
-    @Query("SELECT * FROM shops LIMIT 1")
+    @Query("SELECT * FROM shops ORDER BY updated_at DESC LIMIT 1")
     suspend fun getActiveShop(): ShopEntity?
 
-    @Query("SELECT * FROM shops LIMIT 1")
+    @Query("SELECT * FROM shops ORDER BY updated_at DESC LIMIT 1")
     fun observeActiveShop(): Flow<ShopEntity?>
 
-    @Query("SELECT * FROM shops WHERE phone = :phone LIMIT 1")
+    @Query("SELECT * FROM shops WHERE id = :shopId LIMIT 1")
+    suspend fun getShopById(shopId: String): ShopEntity?
+
+    @Query("SELECT * FROM shops WHERE id = :shopId LIMIT 1")
+    fun observeShopById(shopId: String): Flow<ShopEntity?>
+
+    @Query("SELECT * FROM shops WHERE phone = :phone ORDER BY updated_at DESC LIMIT 1")
     suspend fun getShopByPhone(phone: String): ShopEntity?
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)

@@ -58,13 +58,22 @@ class EmbeddingRepository(
             createdAt = now
         )
 
-        // 2. Generate simulated multi-lighting variants (low light & high light)
-        val lowLightBmp = adjustLighting(bitmap, 0.65f)
-        val highLightBmp = adjustLighting(bitmap, 1.40f)
+        // 2. Generate simulated multi-lighting variants (dim low-light & bright glare/flash)
+        val lowLightBmp = adjustLighting(bitmap, 0.45f)
+        val highLightBmp = adjustLighting(bitmap, 1.55f)
         val lowVectorFloats = embedder.extractEmbedding(lowLightBmp)
         val highVectorFloats = embedder.extractEmbedding(highLightBmp)
         lowLightBmp.recycle()
         highLightBmp.recycle()
+
+        // Also extract a center foreground zoom (0.75x) to guarantee matching across distance/zoom
+        val cropW = (bitmap.width * 0.75f).toInt()
+        val cropH = (bitmap.height * 0.75f).toInt()
+        val startX = ((bitmap.width - cropW) / 2).coerceAtLeast(0)
+        val startY = ((bitmap.height - cropH) / 2).coerceAtLeast(0)
+        val centerBmp = Bitmap.createBitmap(bitmap, startX, startY, cropW, cropH)
+        val centerVectorFloats = embedder.extractEmbedding(centerBmp)
+        centerBmp.recycle()
 
         database.withTransaction {
             embeddingDao.insertEmbedding(entity)
@@ -87,11 +96,12 @@ class EmbeddingRepository(
             )
         }
 
-        // Live update in-memory VectorCache with original + multi-lighting vectors
+        // Live update in-memory VectorCache with original + multi-lighting + center zoom vectors
         val currentItem = itemDao.getItemById(itemId)
         vectorCache.addVector(itemId, vectorFloats, currentItem)
         vectorCache.addVector(itemId, lowVectorFloats, currentItem)
         vectorCache.addVector(itemId, highVectorFloats, currentItem)
+        vectorCache.addVector(itemId, centerVectorFloats, currentItem)
         localBackupManager?.triggerAutoBackup(kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO))
 
         entity

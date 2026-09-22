@@ -117,6 +117,8 @@ fun CameraBillingScreen(
 
     val cameraExecutor = remember { Executors.newSingleThreadExecutor() }
     var cameraProviderRef by remember { mutableStateOf<ProcessCameraProvider?>(null) }
+    var cameraControlRef by remember { mutableStateOf<androidx.camera.core.CameraControl?>(null) }
+    var isFlashOn by remember { mutableStateOf(false) }
 
     val cartLines = remember { mutableStateListOf<CartLine>() }
     var paymentMethod by remember { mutableStateOf("cash") }
@@ -143,6 +145,10 @@ fun CameraBillingScreen(
     DisposableEffect(lifecycleOwner) {
         onDispose {
             try {
+                if (isFlashOn) {
+                    cameraControlRef?.enableTorch(false)
+                    isFlashOn = false
+                }
                 cameraProviderRef?.unbindAll()
                 cameraExecutor.shutdown()
             } catch (_: Throwable) {}
@@ -255,6 +261,16 @@ fun CameraBillingScreen(
                     }
                 },
                 actions = {
+                    IconButton(onClick = {
+                        isFlashOn = !isFlashOn
+                        cameraControlRef?.enableTorch(isFlashOn)
+                    }) {
+                        Icon(
+                            imageVector = if (isFlashOn) Icons.Default.FlashOn else Icons.Default.FlashOff,
+                            contentDescription = if (isFlashOn) "Turn Flash Off" else "Turn Flash On",
+                            tint = if (isFlashOn) Color(0xFFFFEB3B) else Color.White
+                        )
+                    }
                     IconButton(onClick = { showManualAddDialog = true }) {
                         Icon(Icons.Default.Search, contentDescription = "Manual Search / Add", tint = Color.White)
                     }
@@ -321,12 +337,16 @@ fun CameraBillingScreen(
 
                                 try {
                                     cameraProvider.unbindAll()
-                                    cameraProvider.bindToLifecycle(
+                                    val camera = cameraProvider.bindToLifecycle(
                                         lifecycleOwner,
                                         CameraSelector.DEFAULT_BACK_CAMERA,
                                         preview,
                                         imageAnalysis
                                     )
+                                    cameraControlRef = camera.cameraControl
+                                    if (isFlashOn) {
+                                        camera.cameraControl.enableTorch(true)
+                                    }
                                 } catch (_: Exception) {}
                             }, ContextCompat.getMainExecutor(ctx))
 
@@ -334,6 +354,31 @@ fun CameraBillingScreen(
                         },
                         modifier = Modifier.fillMaxSize()
                     )
+
+                    // Floating Flash / Torch Toggle Button on Viewfinder HUD
+                    Surface(
+                        shape = CircleShape,
+                        color = if (isFlashOn) Color(0xFFF59E0B) else Color.Black.copy(alpha = 0.60f),
+                        border = BorderStroke(1.5.dp, if (isFlashOn) Color(0xFFFFD54F) else Color.White.copy(alpha = 0.5f)),
+                        shadowElevation = 6.dp,
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(top = 16.dp, end = 16.dp)
+                            .size(46.dp)
+                            .clickable {
+                                isFlashOn = !isFlashOn
+                                cameraControlRef?.enableTorch(isFlashOn)
+                            }
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                imageVector = if (isFlashOn) Icons.Default.FlashOn else Icons.Default.FlashOff,
+                                contentDescription = if (isFlashOn) "Turn Flash Off" else "Turn Flash On",
+                                tint = if (isFlashOn) Color.Black else Color.White,
+                                modifier = Modifier.size(24.dp)
+                            )
+                        }
+                    }
 
                     val topCandidate = detectedCandidates.firstOrNull()
 

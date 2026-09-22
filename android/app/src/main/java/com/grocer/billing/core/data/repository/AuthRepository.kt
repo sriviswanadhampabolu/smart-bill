@@ -42,8 +42,23 @@ class AuthRepository(
     fun getLastOwnerName(): String = prefs.getString(KEY_LAST_OWNER_NAME, "") ?: ""
     fun hasRegisteredShop(): Boolean = prefs.contains(KEY_LAST_PHONE) || prefs.getBoolean(KEY_IS_LOGGED_IN, false)
 
-    fun observeActiveShop(): Flow<ShopEntity?> = shopDao.observeActiveShop()
-    suspend fun getActiveShop(): ShopEntity? = shopDao.getActiveShop()
+    fun observeActiveShop(): Flow<ShopEntity?> {
+        val activeId = getActiveShopId()
+        return if (!activeId.isNullOrBlank()) {
+            shopDao.observeShopById(activeId)
+        } else {
+            shopDao.observeActiveShop()
+        }
+    }
+
+    suspend fun getActiveShop(): ShopEntity? {
+        val activeId = getActiveShopId()
+        return if (!activeId.isNullOrBlank()) {
+            shopDao.getShopById(activeId) ?: shopDao.getActiveShop()
+        } else {
+            shopDao.getActiveShop()
+        }
+    }
 
     suspend fun createLocalShop(
         shopName: String,
@@ -55,6 +70,7 @@ class AuthRepository(
     ): ShopEntity {
         var remoteShopId: String? = null
         var remoteToken = token
+        val cleanPhone = phone.trim()
 
         // Try registering with remote backend API
         val api = retrofitClient?.getApiService()
@@ -63,7 +79,7 @@ class AuthRepository(
                 val signupReq = SignupRequestDto(
                     shop_name = shopName.trim(),
                     owner_name = ownerName.trim(),
-                    phone = phone.trim(),
+                    phone = cleanPhone,
                     pin = pin?.trim(),
                     upi_id = upiId?.trim()
                 )
@@ -79,15 +95,34 @@ class AuthRepository(
         }
 
         val pinHash = pin?.let { hashPin(it) }
-        val shop = ShopEntity(
-            id = remoteShopId ?: java.util.UUID.randomUUID().toString(),
-            name = shopName.trim(),
-            ownerName = ownerName.trim(),
-            phone = phone.trim(),
-            upiId = upiId?.trim(),
-            pinHash = pinHash
-        )
-        shopDao.insertShop(shop)
+        val existingShop = shopDao.getShopByPhone(cleanPhone) ?: shopDao.getActiveShop()
+
+        val shop = if (existingShop != null) {
+            // Update existing shop in place: NEVER generate a new UUID for an existing shop
+            // as replacing the shop row triggers SQLite ON DELETE CASCADE and wipes inventory items!
+            val updated = existingShop.copy(
+                name = shopName.trim(),
+                ownerName = ownerName.trim(),
+                phone = cleanPhone,
+                upiId = upiId?.trim() ?: existingShop.upiId,
+                pinHash = pinHash ?: existingShop.pinHash,
+                updatedAt = System.currentTimeMillis()
+            )
+            shopDao.updateShop(updated)
+            updated
+        } else {
+            val newShop = ShopEntity(
+                id = remoteShopId ?: java.util.UUID.randomUUID().toString(),
+                name = shopName.trim(),
+                ownerName = ownerName.trim(),
+                phone = cleanPhone,
+                upiId = upiId?.trim(),
+                pinHash = pinHash,
+                updatedAt = System.currentTimeMillis()
+            )
+            shopDao.insertShop(newShop)
+            newShop
+        }
 
         prefs.edit()
             .putBoolean(KEY_IS_LOGGED_IN, true)
@@ -115,15 +150,31 @@ class AuthRepository(
                 val resp = api.pinLogin(req)
                 if (resp.isSuccessful && resp.body() != null) {
                     val tokenData = resp.body()!!
-                    val shop = ShopEntity(
-                        id = tokenData.shop_id,
-                        name = tokenData.shop_name,
-                        ownerName = tokenData.owner_name,
-                        phone = cleanPhone,
-                        currencySymbol = tokenData.currency_symbol,
-                        pinHash = inputPinHash
-                    )
-                    shopDao.insertShop(shop)
+                    val existingShop = shopDao.getShopByPhone(cleanPhone) ?: shopDao.getActiveShop()
+                    val shop = if (existingShop != null) {
+                        val updated = existingShop.copy(
+                            name = tokenData.shop_name,
+                            ownerName = tokenData.owner_name,
+                            phone = cleanPhone,
+                            currencySymbol = tokenData.currency_symbol,
+                            pinHash = inputPinHash,
+                            updatedAt = System.currentTimeMillis()
+                        )
+                        shopDao.updateShop(updated)
+                        updated
+                    } else {
+                        val newShop = ShopEntity(
+                            id = tokenData.shop_id,
+                            name = tokenData.shop_name,
+                            ownerName = tokenData.owner_name,
+                            phone = cleanPhone,
+                            currencySymbol = tokenData.currency_symbol,
+                            pinHash = inputPinHash,
+                            updatedAt = System.currentTimeMillis()
+                        )
+                        shopDao.insertShop(newShop)
+                        newShop
+                    }
 
                     prefs.edit()
                         .putBoolean(KEY_IS_LOGGED_IN, true)

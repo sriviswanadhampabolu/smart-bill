@@ -8,8 +8,10 @@ class ShopRepository(
     private val shopDao: ShopDao
 ) {
     fun observeShop(): Flow<ShopEntity?> = shopDao.observeActiveShop()
+    fun observeShopById(shopId: String): Flow<ShopEntity?> = shopDao.observeShopById(shopId)
 
     suspend fun getShop(): ShopEntity? = shopDao.getActiveShop()
+    suspend fun getShopById(shopId: String): ShopEntity? = shopDao.getShopById(shopId)
 
     suspend fun updateShopProfile(shop: ShopEntity) {
         shopDao.updateShop(shop.copy(updatedAt = System.currentTimeMillis()))

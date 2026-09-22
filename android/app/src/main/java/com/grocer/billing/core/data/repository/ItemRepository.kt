@@ -30,22 +30,34 @@ class ItemRepository(
     }
 
     fun observeItems(shopId: String, lowestStockFirst: Boolean = true): Flow<List<ItemEntity>> {
-        return if (lowestStockFirst) {
-            itemDao.observeItemsLowStockFirst(shopId)
+        return if (shopId.isBlank()) {
+            if (lowestStockFirst) itemDao.observeAllItemsLowStockFirst() else itemDao.observeAllActiveItemsByName()
         } else {
-            itemDao.observeActiveItems(shopId)
+            if (lowestStockFirst) itemDao.observeItemsLowStockFirst(shopId) else itemDao.observeActiveItems(shopId)
         }
     }
 
     fun observeLowStockAlerts(shopId: String): Flow<List<ItemEntity>> {
-        return itemDao.observeLowStockAlerts(shopId)
+        return if (shopId.isBlank()) {
+            itemDao.observeAllLowStockAlerts()
+        } else {
+            itemDao.observeLowStockAlerts(shopId)
+        }
     }
+
+    suspend fun getActiveShopId(): String? = database.shopDao().getActiveShop()?.id
 
     suspend fun searchItems(shopId: String, query: String): List<ItemEntity> {
         return if (query.isBlank()) {
-            emptyList()
+            if (shopId.isBlank()) {
+                val activeId = getActiveShopId() ?: ""
+                if (activeId.isNotBlank()) itemDao.getAllItems(activeId) else emptyList()
+            } else {
+                itemDao.getAllItems(shopId)
+            }
         } else {
-            itemDao.searchItems(shopId, query.trim())
+            val effectiveShopId = if (shopId.isNotBlank()) shopId else (getActiveShopId() ?: "")
+            itemDao.searchItems(effectiveShopId, query.trim())
         }
     }
 
@@ -64,8 +76,25 @@ class ItemRepository(
         stockQty: Double,
         lowStockThreshold: Double
     ): ItemEntity {
+        // Resolve a guaranteed non-blank shopId.
+        // If shopId is empty or no shop exists, fetch or create a default shop to satisfy foreign key constraints.
+        val effectiveShopId = if (shopId.isNotBlank()) {
+            shopId
+        } else {
+            database.shopDao().getActiveShop()?.id ?: run {
+                val defaultShop = com.grocer.billing.core.data.local.entities.ShopEntity(
+                    id = java.util.UUID.randomUUID().toString(),
+                    name = "My Grocery Store",
+                    ownerName = "Shop Owner",
+                    phone = "0000000000"
+                )
+                database.shopDao().insertShop(defaultShop)
+                defaultShop.id
+            }
+        }
+
         val item = ItemEntity(
-            shopId = shopId,
+            shopId = effectiveShopId,
             name = name.trim(),
             nameRegional = nameRegional?.trim()?.ifBlank { null },
             category = category.trim(),
@@ -106,7 +135,7 @@ class ItemRepository(
         // Instantly register item with vector cache for 0ms visual lookup
         vectorCache?.registerItem(item)
         localBackupManager?.triggerAutoBackup(kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO))
-        syncManager?.triggerAutoSync(shopId)
+        syncManager?.triggerAutoSync(effectiveShopId)
 
         return item
     }

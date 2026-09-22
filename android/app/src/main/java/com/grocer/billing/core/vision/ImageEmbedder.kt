@@ -1,6 +1,9 @@
 package com.grocer.billing.core.vision
 
 import android.graphics.Bitmap
+import kotlin.math.atan2
+import kotlin.math.exp
+import kotlin.math.ln
 import kotlin.math.sqrt
 
 interface ImageEmbedder {
@@ -9,8 +12,10 @@ interface ImageEmbedder {
 }
 
 /**
- * MobileNetV3 / Lightweight CNN Feature Extractor.
- * Computes L2-normalized float embeddings.
+ * Illumination-Invariant & Background-Resilient Feature Extractor.
+ * Computes 512-D L2-normalized float embeddings resilient to:
+ * - Varied backgrounds (table, hand, shelf, counter) via border sampling & saliency suppression
+ * - Dynamic lighting (low light, bright light, glare, shadows) via Gray World color constancy and log-contrast tone mapping
  */
 class MobileNetV3Embedder(
     override val embeddingDimension: Int = 512
@@ -28,9 +33,8 @@ class MobileNetV3Embedder(
         val pixels = IntArray(targetSize * targetSize)
         scaled.getPixels(pixels, 0, targetSize, 0, 0, targetSize, targetSize)
 
-        // Precompute per-pixel R, G, B, Lum, Sat, Hue, and center weight
         val half = targetSize / 2f
-        val maxDist = kotlin.math.sqrt((half * half + half * half).toDouble()).toFloat()
+        val maxDist = sqrt((half * half + half * half).toDouble()).toFloat()
 
         val rArr = FloatArray(pixels.size)
         val gArr = FloatArray(pixels.size)
@@ -38,16 +42,23 @@ class MobileNetV3Embedder(
         val lumArr = FloatArray(pixels.size)
         val satArr = FloatArray(pixels.size)
         val hueArr = FloatArray(pixels.size)
-        val weightArr = FloatArray(pixels.size)
-        val ringArr = IntArray(pixels.size) // 0..3 concentric rings
-        val quadArr = IntArray(pixels.size) // 0..3 quadrants
+        val distNormArr = FloatArray(pixels.size)
+        val quadArr = IntArray(pixels.size)
+        val ringArr = IntArray(pixels.size)
 
-        var totalWeight = 0f
+        // 1. Unpack RGB, Hue, Saturation, Raw Luminance, and Geometry
+        var borderRSum = 0f
+        var borderGSum = 0f
+        var borderBSum = 0f
+        var borderCount = 0
+
+        val borderMargin = 8 // Outer 8 pixels around frame perimeter represent background surface
 
         for (y in 0 until targetSize) {
             val dy = y - half
             val rowOff = y * targetSize
             val qY = if (y < half) 0 else 1
+            val isBorderY = (y < borderMargin || y >= targetSize - borderMargin)
 
             for (x in 0 until targetSize) {
                 val dx = x - half
@@ -56,16 +67,10 @@ class MobileNetV3Embedder(
                 val qX = if (x < half) 0 else 1
                 quadArr[idx] = qY * 2 + qX
 
-                val dist = kotlin.math.sqrt((dx * dx + dy * dy).toDouble()).toFloat()
+                val dist = sqrt((dx * dx + dy * dy).toDouble()).toFloat()
                 val distNorm = (dist / maxDist).coerceIn(0f, 1f)
-                // Center-weighted Gaussian mask: center is 1.0, corners are ~0.15
-                val w = kotlin.math.exp((-2.5 * distNorm * distNorm).toDouble()).toFloat()
-                weightArr[idx] = w
-                totalWeight += w
-
-                // Concentric ring index (0=core, 1=mid-in, 2=mid-out, 3=edge)
-                val ring = (distNorm * 4).toInt().coerceIn(0, 3)
-                ringArr[idx] = ring
+                distNormArr[idx] = distNorm
+                ringArr[idx] = (distNorm * 4).toInt().coerceIn(0, 3)
 
                 val r = (pixel shr 16 and 0xFF) / 255f
                 val g = (pixel shr 8 and 0xFF) / 255f
@@ -74,12 +79,12 @@ class MobileNetV3Embedder(
                 gArr[idx] = g
                 bArr[idx] = b
 
-                val maxC = maxOf(r, maxOf(g, b))
-                val minC = minOf(r, minOf(g, b))
-                val delta = maxC - minC
                 val lum = 0.299f * r + 0.587f * g + 0.114f * b
                 lumArr[idx] = lum
 
+                val maxC = maxOf(r, maxOf(g, b))
+                val minC = minOf(r, minOf(g, b))
+                val delta = maxC - minC
                 val sat = if (maxC > 1e-4f) delta / maxC else 0f
                 satArr[idx] = sat
 
@@ -94,57 +99,133 @@ class MobileNetV3Embedder(
                     if (hue < 0f) hue += 360f
                 }
                 hueArr[idx] = hue / 360f // Normalized to 0..1
+
+                // Sample perimeter border to model the surrounding background surface
+                if (isBorderY || x < borderMargin || x >= targetSize - borderMargin) {
+                    borderRSum += r
+                    borderGSum += g
+                    borderBSum += b
+                    borderCount++
+                }
             }
         }
 
-        val invTotalWeight = if (totalWeight > 0f) 1f / totalWeight else 1f
+        val bgR = if (borderCount > 0) borderRSum / borderCount else 0.5f
+        val bgG = if (borderCount > 0) borderGSum / borderCount else 0.5f
+        val bgB = if (borderCount > 0) borderBSum / borderCount else 0.5f
 
-        // Compute average luminance across all pixels to determine illumination scaling
-        var sumLum = 0f
-        for (i in pixels.indices) {
-            sumLum += lumArr[i]
+        // 2. Compute Sobel Edge Magnitude & Gradient Orientation
+        val gxArr = FloatArray(pixels.size)
+        val gyArr = FloatArray(pixels.size)
+        val magArr = FloatArray(pixels.size)
+        val angleBinArr = IntArray(pixels.size)
+        var totalMag = 0f
+        val quadMagSum = FloatArray(4)
+
+        for (y in 1 until targetSize - 1) {
+            val rowPrev = (y - 1) * targetSize
+            val rowCurr = y * targetSize
+            val rowNext = (y + 1) * targetSize
+
+            for (x in 1 until targetSize - 1) {
+                val idx = rowCurr + x
+                val gx = (lumArr[rowPrev + x + 1] + 2f * lumArr[rowCurr + x + 1] + lumArr[rowNext + x + 1]) -
+                         (lumArr[rowPrev + x - 1] + 2f * lumArr[rowCurr + x - 1] + lumArr[rowNext + x - 1])
+                val gy = (lumArr[rowNext + x - 1] + 2f * lumArr[rowNext + x] + lumArr[rowNext + x + 1]) -
+                         (lumArr[rowPrev + x - 1] + 2f * lumArr[rowPrev + x] + lumArr[rowPrev + x + 1])
+
+                val mag = sqrt((gx * gx + gy * gy).toDouble()).toFloat()
+                var angle = atan2(gy.toDouble(), gx.toDouble()).toFloat()
+                if (angle < 0f) angle += (2f * Math.PI.toFloat())
+                val aBin = ((angle / (2f * Math.PI.toFloat())) * 15.99f).toInt().coerceIn(0, 15)
+
+                gxArr[idx] = gx
+                gyArr[idx] = gy
+                magArr[idx] = mag
+                angleBinArr[idx] = aBin
+                totalMag += mag
+                quadMagSum[quadArr[idx]] += mag
+            }
         }
-        val avgLum = sumLum / pixels.size.coerceAtLeast(1)
 
-        // Target standard counter lighting luminance ~ 0.48
-        // Gain normalizes under-exposed (low light) and over-exposed (high light/glare) images
-        val lumGain = (0.48f / avgLum.coerceAtLeast(0.06f)).coerceIn(0.45f, 3.2f)
+        // 3. Compute Adaptive Foreground Saliency & Background Suppression Weights
+        val weightArr = FloatArray(pixels.size)
+        var totalWeight = 0f
+        var fgRSum = 0f
+        var fgGSum = 0f
+        var fgBSum = 0f
 
-        // Compute illumination-normalized RGB and chromaticity coordinates
+        for (i in pixels.indices) {
+            val distNorm = distNormArr[i]
+            // Center Sigmoid falloff: 1.0 within central 46% radius, drops sharply outside
+            val wCenter = (1.0f / (1.0f + exp(9.0f * (distNorm - 0.46f)))).coerceIn(0.01f, 1.0f)
+
+            // Background Color Dissimilarity
+            val dr = rArr[i] - bgR
+            val dg = gArr[i] - bgG
+            val db = bArr[i] - bgB
+            val distFromBg = sqrt((dr * dr + dg * dg + db * db).toDouble()).toFloat()
+
+            // If away from absolute center and matches background color, strongly suppress
+            val wBg = if (distNorm > 0.28f) {
+                (distFromBg / 0.16f).coerceIn(0.08f, 1.0f)
+            } else {
+                1.0f
+            }
+
+            // Saliency boost for packaging edges / text
+            val wEdge = 1.0f + 2.0f * (magArr[i] / 0.08f).coerceIn(0f, 1.0f)
+
+            val w = wCenter * wBg * wEdge
+            weightArr[i] = w
+            totalWeight += w
+
+            fgRSum += rArr[i] * w
+            fgGSum += gArr[i] * w
+            fgBSum += bArr[i] * w
+        }
+
+        val invTotalWeight = if (totalWeight > 0f) 1f / totalWeight else 1f
+        val meanFgR = (fgRSum * invTotalWeight).coerceAtLeast(0.06f)
+        val meanFgG = (fgGSum * invTotalWeight).coerceAtLeast(0.06f)
+        val meanFgB = (fgBSum * invTotalWeight).coerceAtLeast(0.06f)
+        val grayWorldTarget = (meanFgR + meanFgG + meanFgB) / 3f
+
+        // 4. Illumination Normalization (Gray World White Balance + Logarithmic Contrast Mapping)
         val rNorm = FloatArray(pixels.size)
         val gNorm = FloatArray(pixels.size)
         val bNorm = FloatArray(pixels.size)
         val lNorm = FloatArray(pixels.size)
-        val rChroma = FloatArray(pixels.size)
-        val gChroma = FloatArray(pixels.size)
+        val hueWeight = FloatArray(pixels.size)
+
+        val rGain = (grayWorldTarget / meanFgR).coerceIn(0.40f, 2.50f)
+        val gGain = (grayWorldTarget / meanFgG).coerceIn(0.40f, 2.50f)
+        val bGain = (grayWorldTarget / meanFgB).coerceIn(0.40f, 2.50f)
 
         for (i in pixels.indices) {
-            val rn = (rArr[i] * lumGain).coerceIn(0f, 1f)
-            val gn = (gArr[i] * lumGain).coerceIn(0f, 1f)
-            val bn = (bArr[i] * lumGain).coerceIn(0f, 1f)
-            rNorm[i] = rn
-            gNorm[i] = gn
-            bNorm[i] = bn
-            lNorm[i] = (0.299f * rn + 0.587f * gn + 0.114f * bn).coerceIn(0f, 1f)
+            val rCorrected = (rArr[i] * rGain).coerceIn(0f, 1f)
+            val gCorrected = (gArr[i] * gGain).coerceIn(0f, 1f)
+            val bCorrected = (bArr[i] * bGain).coerceIn(0f, 1f)
 
-            val sumC = rArr[i] + gArr[i] + bArr[i] + 1e-4f
-            rChroma[i] = (rArr[i] / sumC).coerceIn(0f, 1f)
-            gChroma[i] = (gArr[i] / sumC).coerceIn(0f, 1f)
+            // Logarithmic tone mapping for resilient low-light contrast without highlight blowouts
+            val rawL = 0.299f * rCorrected + 0.587f * gCorrected + 0.114f * bCorrected
+            val logL = (ln(1.0 + 8.0 * rawL) / ln(9.0)).toFloat().coerceIn(0f, 1f)
+            val boost = if (rawL > 1e-4f) (logL / rawL).coerceIn(0.5f, 2.2f) else 1.0f
+
+            rNorm[i] = (rCorrected * boost).coerceIn(0f, 1f)
+            gNorm[i] = (gCorrected * boost).coerceIn(0f, 1f)
+            bNorm[i] = (bCorrected * boost).coerceIn(0f, 1f)
+            lNorm[i] = logL
+
+            // Gated hue weight: suppress hue noise in dim / desaturated pixels
+            hueWeight[i] = (satArr[i] / 0.14f).coerceIn(0f, 1f)
         }
 
         // -------------------------------------------------------------
-        // Section 1: Global Center-Weighted Color Distribution (128 dims: offset 0..127)
+        // Section 1: Foreground Color & Chromatic Distribution (128 dims: 0..127)
         // -------------------------------------------------------------
-        // Bins:
-        // R (16 bins): 0..15
-        // G (16 bins): 16..31
-        // B (16 bins): 32..47
-        // Hue (32 bins): 48..79
-        // Sat (16 bins): 80..95
-        // Lum (16 bins): 96..111
-        // Color moments (16 bins): 112..127
         for (i in pixels.indices) {
-            val w = weightArr[i]
+            val w = weightArr[i] * invTotalWeight
             val rBin = (rNorm[i] * 15.99f).toInt().coerceIn(0, 15)
             val gBin = (gNorm[i] * 15.99f).toInt().coerceIn(0, 15)
             val bBin = (bNorm[i] * 15.99f).toInt().coerceIn(0, 15)
@@ -152,15 +233,16 @@ class MobileNetV3Embedder(
             val sBin = (satArr[i] * 15.99f).toInt().coerceIn(0, 15)
             val lBin = (lNorm[i] * 15.99f).toInt().coerceIn(0, 15)
 
-            embedding[0 + rBin] += w * invTotalWeight
-            embedding[16 + gBin] += w * invTotalWeight
-            embedding[32 + bBin] += w * invTotalWeight
-            embedding[48 + hBin] += w * invTotalWeight
-            embedding[80 + sBin] += w * invTotalWeight
-            embedding[96 + lBin] += w * invTotalWeight
+            embedding[0 + rBin] += w
+            embedding[16 + gBin] += w
+            embedding[32 + bBin] += w
+            // Hue channel weighted by saturation to neutralize low-light chromatic noise
+            embedding[48 + hBin] += w * hueWeight[i]
+            embedding[80 + sBin] += w
+            embedding[96 + lBin] += w
         }
 
-        // Global moments (mean & variance for normalized R, G, B, H, S, Lum, plus opponent channels)
+        // Global illumination-invariant moments (RG opponent & YB opponent)
         var meanR = 0f; var meanG = 0f; var meanB = 0f
         var meanH = 0f; var meanS = 0f; var meanL = 0f
         for (i in pixels.indices) {
@@ -168,7 +250,7 @@ class MobileNetV3Embedder(
             meanR += rNorm[i] * w
             meanG += gNorm[i] * w
             meanB += bNorm[i] * w
-            meanH += hueArr[i] * w
+            meanH += hueArr[i] * w * hueWeight[i]
             meanS += satArr[i] * w
             meanL += lNorm[i] * w
         }
@@ -187,11 +269,11 @@ class MobileNetV3Embedder(
         embedding[115] = meanH
         embedding[116] = meanS
         embedding[117] = meanL
-        embedding[118] = kotlin.math.sqrt(varR.toDouble()).toFloat()
-        embedding[119] = kotlin.math.sqrt(varG.toDouble()).toFloat()
-        embedding[120] = kotlin.math.sqrt(varB.toDouble()).toFloat()
-        embedding[121] = kotlin.math.sqrt(varL.toDouble()).toFloat()
-        embedding[122] = (meanR - meanG + 1f) * 0.5f // RG chromatic opponent
+        embedding[118] = sqrt(varR.toDouble()).toFloat()
+        embedding[119] = sqrt(varG.toDouble()).toFloat()
+        embedding[120] = sqrt(varB.toDouble()).toFloat()
+        embedding[121] = sqrt(varL.toDouble()).toFloat()
+        embedding[122] = (meanR - meanG + 1f) * 0.5f // RG chromatic opponent (invariant to brightness)
         embedding[123] = (meanR + meanG - 2f * meanB + 2f) * 0.25f // YB opponent
         embedding[124] = meanS * (1f - meanL) // Vividness contrast
         embedding[125] = if (varL > 1e-4f) varR / varL else 0f
@@ -199,9 +281,8 @@ class MobileNetV3Embedder(
         embedding[127] = maxOf(0f, meanL - meanS)
 
         // -------------------------------------------------------------
-        // Section 2: Concentric Circular Ring Features (128 dims: offset 128..255)
-        // Highly rotation-invariant (packaging tilted at any angle has matching rings)
-        // 4 rings * 32 dims = 128 dims
+        // Section 2: Concentric Circular Ring Features (128 dims: 128..255)
+        // Rotation-invariant foreground layout
         // -------------------------------------------------------------
         val ringWeights = FloatArray(4)
         for (i in pixels.indices) {
@@ -221,52 +302,19 @@ class MobileNetV3Embedder(
             embedding[base + 0 + rBin] += rw
             embedding[base + 8 + gBin] += rw
             embedding[base + 16 + bBin] += rw
-            embedding[base + 24 + hBin] += rw
+            embedding[base + 24 + hBin] += rw * hueWeight[i]
         }
 
         // -------------------------------------------------------------
-        // Section 3: Sobel Edge & Gradient Orientation (128 dims: offset 256..383)
-        // Captures packaging text, brand logos, stripes, bar lines
+        // Section 3: Sobel Edge & Gradient Orientation (128 dims: 256..383)
+        // High-frequency branding, packaging text, geometric contours
+        // Inherently invariant to illumination and background
         // -------------------------------------------------------------
-        var totalMag = 0f
-        val quadMagSum = FloatArray(4)
-
-        val gxArr = FloatArray(pixels.size)
-        val gyArr = FloatArray(pixels.size)
-        val magArr = FloatArray(pixels.size)
-        val angleBinArr = IntArray(pixels.size)
-
-        for (y in 1 until targetSize - 1) {
-            val rowPrev = (y - 1) * targetSize
-            val rowCurr = y * targetSize
-            val rowNext = (y + 1) * targetSize
-
-            for (x in 1 until targetSize - 1) {
-                val idx = rowCurr + x
-                val gx = (lNorm[rowPrev + x + 1] + 2f * lNorm[rowCurr + x + 1] + lNorm[rowNext + x + 1]) -
-                         (lNorm[rowPrev + x - 1] + 2f * lNorm[rowCurr + x - 1] + lNorm[rowNext + x - 1])
-                val gy = (lNorm[rowNext + x - 1] + 2f * lNorm[rowNext + x] + lNorm[rowNext + x + 1]) -
-                         (lNorm[rowPrev + x - 1] + 2f * lNorm[rowPrev + x] + lNorm[rowPrev + x + 1])
-
-                val mag = kotlin.math.sqrt((gx * gx + gy * gy).toDouble()).toFloat()
-                var angle = kotlin.math.atan2(gy.toDouble(), gx.toDouble()).toFloat()
-                if (angle < 0f) angle += (2f * Math.PI.toFloat())
-                val aBin = ((angle / (2f * Math.PI.toFloat())) * 15.99f).toInt().coerceIn(0, 15)
-
-                gxArr[idx] = gx
-                gyArr[idx] = gy
-                magArr[idx] = mag
-                angleBinArr[idx] = aBin
-                totalMag += mag
-                quadMagSum[quadArr[idx]] += mag
-            }
-        }
-
         val totalEdgePixels = (targetSize - 2) * (targetSize - 2)
         val avgMag = totalMag / totalEdgePixels.coerceAtLeast(1)
-        val adaptiveEdgeThreshold = (0.5f * avgMag).coerceIn(0.008f, 0.04f)
-
+        val adaptiveEdgeThreshold = (0.45f * avgMag).coerceIn(0.006f, 0.035f)
         val invTotalMag = if (totalMag > 0f) 1f / totalMag else 1f
+
         for (y in 1 until targetSize - 1) {
             val rowOff = y * targetSize
             for (x in 1 until targetSize - 1) {
@@ -275,8 +323,10 @@ class MobileNetV3Embedder(
                 if (mag > adaptiveEdgeThreshold) {
                     val aBin = angleBinArr[idx]
                     val mBin = (mag * 3.99f).toInt().coerceIn(0, 15)
-                    embedding[256 + aBin] += mag * invTotalMag
-                    embedding[272 + mBin] += mag * invTotalMag
+                    val effectiveMag = mag * weightArr[idx] * invTotalMag
+
+                    embedding[256 + aBin] += effectiveMag
+                    embedding[272 + mBin] += effectiveMag
 
                     val quad = quadArr[idx]
                     val qInv = if (quadMagSum[quad] > 0f) 1f / quadMagSum[quad] else 0f
@@ -290,9 +340,7 @@ class MobileNetV3Embedder(
         }
 
         // -------------------------------------------------------------
-        // Section 4: Coarse 2x2 Spatial Quadrants (128 dims: offset 384..511)
-        // 4 quadrants * 32 dims = 128 dims
-        // Provides macro-level spatial color distribution
+        // Section 4: Foreground Spatial Macro-Quadrants (128 dims: 384..511)
         // -------------------------------------------------------------
         val quadWeights = FloatArray(4)
         for (i in pixels.indices) quadWeights[quadArr[i]] += weightArr[i]
@@ -310,7 +358,7 @@ class MobileNetV3Embedder(
             embedding[base + 0 + rBin] += qw
             embedding[base + 8 + gBin] += qw
             embedding[base + 16 + bBin] += qw
-            embedding[base + 24 + hBin] += qw
+            embedding[base + 24 + hBin] += qw * hueWeight[i]
         }
 
         // L2 Normalization (so dot product equals cosine similarity)
