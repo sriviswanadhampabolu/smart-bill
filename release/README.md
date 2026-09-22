@@ -8,7 +8,7 @@ This folder contains pre-built Android application packages (`.apk`) for **Smart
 
 | File | Size | Architecture | Target SDK | SHA-256 Checksum |
 | :--- | :--- | :--- | :--- | :--- |
-| **[`SmartBill-v1.0.0.apk`](./SmartBill-v1.0.0.apk)** | ~35.5 MB | universal (arm64-v8a, armeabi-v7a, x86_64) | Android 14 (API 34) / Min Android 8.0 (API 26) | `F08359BEEF0B42773DA3CFDAFA9A1307183AABBB0A173C1A1F682B505A876953` |
+| **[`SmartBill-v1.0.0.apk`](./SmartBill-v1.0.0.apk)** | ~35.5 MB | universal (arm64-v8a, armeabi-v7a, x86_64) | Android 14 (API 34) / Min Android 8.0 (API 26) | `FBB190789206DC966F4E0ABCAE21F810CDF666D10D7F05D171A98706D5CFD25E` |
 
 ---
 
@@ -26,10 +26,12 @@ This folder contains pre-built Android application packages (`.apk`) for **Smart
 
 ---
 
-## 🌟 What's New in v1.0.0
+## 🌟 What's New in v1.0.0 (Updated)
 
+- 🔦 **Manual Camera Flash Control**: Toggle torch on and off manually in camera billing.
+- 🎯 **Background & Illumination Invariant Recognition**: Border color sampling, center-sigmoid saliency, Gray-World color constancy, and multi-crop matching detect items in any background (table, hand, shelf) and lighting (high/low/glare).
+- 📦 **Inventory Management Stability**: Fixed item addition and eliminated accidental item deletions on shop session reload.
 - 🏷️ **Rebranded to SmartBill** with a sleek new app icon and unified branding.
-- 👁️ **Adaptive Lighting AI Vision**: Items are recognized with high precision even when ambient lighting changes (dim room, bright daylight, harsh shadows).
 - 📜 **Previous Bills Feature**: Search historical bills, view itemized receipts, filter by payment method (Cash, UPI QR, Khata), and share receipts via WhatsApp.
 - 🌐 **Full Multilingual Support**: 8 Indian languages supported app-wide (English, Hindi, Tamil, Telugu, Kannada, Marathi, Gujarati, Bengali).
 - 🍫 **Expanded Catalog**: Over 25+ new items across Chocolates, Biscuits, Notebooks, Pens & Stationery with one-tap inventory import.
