@@ -44,7 +44,7 @@ class BillingApplication : Application() {
         database = AppDatabase.getInstance(this)
         retrofitClient = RetrofitClient(this)
 
-        imageEmbedder = com.grocer.billing.core.vision.MobileNetV3Embedder()
+        imageEmbedder = com.grocer.billing.core.vision.MobileNetV3Embedder(this)
         vectorCache = com.grocer.billing.core.vision.VectorCache()
         imageQualityChecker = com.grocer.billing.core.vision.ImageQualityChecker()
 

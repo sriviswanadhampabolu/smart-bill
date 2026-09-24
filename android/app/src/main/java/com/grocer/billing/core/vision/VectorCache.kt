@@ -13,8 +13,8 @@ data class RecognitionMatch(
 class VectorCache {
 
     companion object {
-        const val HIGH_CONFIDENCE_THRESHOLD = 0.65f
-        const val LOW_CONFIDENCE_THRESHOLD = 0.35f
+        const val HIGH_CONFIDENCE_THRESHOLD = 0.52f
+        const val LOW_CONFIDENCE_THRESHOLD = 0.28f
     }
 
     // In-memory normalized vector entries: (itemId, vectorFloatArray)
@@ -60,6 +60,7 @@ class VectorCache {
         val itemBestScores = mutableMapOf<String, Float>()
 
         for ((itemId, refVector) in vectors) {
+            if (refVector.size != queryVector.size) continue
             val similarity = dotProduct(queryVector, refVector)
             val currentBest = itemBestScores[itemId] ?: -1f
             if (similarity > currentBest) {

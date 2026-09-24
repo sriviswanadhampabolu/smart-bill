@@ -128,17 +128,20 @@ class EmbeddingRepository(
         val allItems = if (shopId.isNotBlank()) itemDao.getAllItems(shopId) else itemDao.searchItems("", "")
         vectorCache.updateCatalog(allItems, pairs)
 
-        // If any item has a saved thumbnail on disk but no DB vector yet, auto-embed it
+        // If any item has a saved thumbnail on disk but no DB vector matching current embedder dimension, auto-embed it
+        val targetByteLength = embedder.embeddingDimension * 4
         for (item in allItems) {
             val path = item.imagePath
-            if (path != null && pairs.none { it.first == item.id }) {
+            val hasValidVector = pairs.any { it.first == item.id && it.second.size == targetByteLength }
+            if (path != null && !hasValidVector) {
                 try {
                     val file = File(path)
                     if (file.exists()) {
                         val bmp = android.graphics.BitmapFactory.decodeFile(file.absolutePath)
                         if (bmp != null) {
                             val floats = embedder.extractEmbedding(bmp)
-                            vectorCache.addVector(item.id, floats)
+                            vectorCache.addVector(item.id, floats, item)
+                            bmp.recycle()
                         }
                     }
                 } catch (_: Exception) {}
