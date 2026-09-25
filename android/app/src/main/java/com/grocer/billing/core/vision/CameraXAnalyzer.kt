@@ -82,12 +82,11 @@ class CameraXAnalyzer(
                 }
 
                 // 3. Visual Embedding Extraction for trained products & unpackaged goods
-                // Evaluate both standard reticle crop and a tight foreground crop (0.48f)
-                // The tight crop isolates the item from table/hands/background for maximum recognition reliability
+                // Multi-scale crops: tight foreground (0.45f), central reticle (0.65f), and wide (0.80f)
                 val queryVectorReticle = embedder.extractEmbedding(croppedBitmap)
                 val matchesReticle = vectorCache.match(queryVectorReticle, topK = 3)
 
-                val tightSize = (minOf(finalBitmap.width, finalBitmap.height) * 0.48f).toInt()
+                val tightSize = (minOf(finalBitmap.width, finalBitmap.height) * 0.45f).toInt()
                 val tightStartX = ((finalBitmap.width - tightSize) / 2).coerceAtLeast(0)
                 val tightStartY = ((finalBitmap.height - tightSize) / 2).coerceAtLeast(0)
                 val safeTightW = tightSize.coerceAtMost(finalBitmap.width - tightStartX)
@@ -96,9 +95,18 @@ class CameraXAnalyzer(
                 val queryVectorTight = embedder.extractEmbedding(tightBitmap)
                 val matchesTight = vectorCache.match(queryVectorTight, topK = 3)
 
+                val wideSize = (minOf(finalBitmap.width, finalBitmap.height) * 0.80f).toInt()
+                val wideStartX = ((finalBitmap.width - wideSize) / 2).coerceAtLeast(0)
+                val wideStartY = ((finalBitmap.height - wideSize) / 2).coerceAtLeast(0)
+                val safeWideW = wideSize.coerceAtMost(finalBitmap.width - wideStartX)
+                val safeWideH = wideSize.coerceAtMost(finalBitmap.height - wideStartY)
+                val wideBitmap = Bitmap.createBitmap(finalBitmap, wideStartX, wideStartY, safeWideW, safeWideH)
+                val queryVectorWide = embedder.extractEmbedding(wideBitmap)
+                val matchesWide = vectorCache.match(queryVectorWide, topK = 3)
+
                 // Combine multi-crop candidates taking the highest confidence score per item
                 val bestScoreMap = mutableMapOf<String, RecognitionMatch>()
-                for (match in (matchesReticle + matchesTight)) {
+                for (match in (matchesReticle + matchesTight + matchesWide)) {
                     val current = bestScoreMap[match.item.id]
                     if (current == null || match.confidence > current.confidence) {
                         bestScoreMap[match.item.id] = match
@@ -112,9 +120,13 @@ class CameraXAnalyzer(
                     visualMatches
                 }
 
-                if (combinedMatches.isNotEmpty()) {
-                    onCandidatesDetected(combinedMatches)
-                }
+                onCandidatesDetected(combinedMatches)
+
+                if (croppedBitmap != finalBitmap) croppedBitmap.recycle()
+                if (tightBitmap != finalBitmap) tightBitmap.recycle()
+                if (wideBitmap != finalBitmap) wideBitmap.recycle()
+                if (finalBitmap != rawBitmap) finalBitmap.recycle()
+                rawBitmap.recycle()
             } catch (_: Throwable) {
                 // Ignore transient frame conversion glitches or memory limits
             } finally {

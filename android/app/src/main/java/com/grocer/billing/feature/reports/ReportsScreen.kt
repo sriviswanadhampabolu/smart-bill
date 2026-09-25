@@ -8,10 +8,13 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.CloudDone
 import androidx.compose.material.icons.filled.CloudSync
+import androidx.compose.material.icons.filled.Payments
+import androidx.compose.material.icons.filled.Receipt
 import androidx.compose.material.icons.filled.Sync
-import androidx.compose.material.icons.filled.TrendingUp
+import androidx.compose.material.icons.automirrored.filled.TrendingUp
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -28,6 +31,8 @@ import com.grocer.billing.core.data.repository.ReportsRepository
 import com.grocer.billing.core.data.sync.SyncManager
 import com.grocer.billing.ui.theme.*
 import kotlinx.coroutines.launch
+import java.text.SimpleDateFormat
+import java.util.*
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -49,6 +54,12 @@ fun ReportsScreen(
 
     val todaySales by billingRepository.observeTodaySales(shopId).collectAsState(initial = 0.0)
     val todayBillsCount by billingRepository.observeTodayBillsCount(shopId).collectAsState(initial = 0)
+    val monthSales by billingRepository.observeMonthSales(shopId).collectAsState(initial = 0.0)
+    val monthBillsCount by billingRepository.observeMonthBillsCount(shopId).collectAsState(initial = 0)
+
+    val currentMonthName = remember {
+        SimpleDateFormat("MMMM yyyy", Locale.getDefault()).format(Date())
+    }
 
     fun refreshData() {
         coroutineScope.launch {
@@ -69,7 +80,7 @@ fun ReportsScreen(
                     title = {
                         Column {
                             Text("Business Reports", fontWeight = FontWeight.ExtraBold, color = Color.White, fontSize = 20.sp)
-                            Text("Executive Analytics & Sync", fontSize = 11.sp, color = Color.White.copy(alpha = 0.8f))
+                            Text("Executive Analytics & Monthly Sales", fontSize = 11.sp, color = Color.White.copy(alpha = 0.85f))
                         }
                     },
                     navigationIcon = {
@@ -92,7 +103,7 @@ fun ReportsScreen(
                             Icon(Icons.Default.Sync, contentDescription = "Sync", tint = Color.White)
                         }
                     },
-                    colors = TopAppBarDefaults.topAppBarColors(containerColor = GreenPrimary.copy(alpha = 0.90f))
+                    colors = TopAppBarDefaults.topAppBarColors(containerColor = GreenPrimary.copy(alpha = 0.92f))
                 )
             }
         ) { paddingValues ->
@@ -104,7 +115,7 @@ fun ReportsScreen(
                     .padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                // Cloud Sync Status Liquid Glass Pill
+                // Cloud Sync Status Pill
                 LiquidGlassCard(
                     modifier = Modifier.fillMaxWidth(),
                     tint = if (pendingSyncCount == 0) GlassGreenSurface else Color(0xFFFFF3E0).copy(alpha = 0.85f),
@@ -141,6 +152,96 @@ fun ReportsScreen(
                     }
                 }
 
+                // Monthly Sales Highlight Hero Card
+                LiquidGlassCard(
+                    modifier = Modifier.fillMaxWidth(),
+                    tint = Color.White.copy(alpha = 0.92f),
+                    elevation = 6.dp
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(
+                                modifier = Modifier
+                                    .size(42.dp)
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(Color(0xFFEEF2FF)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.CalendarMonth,
+                                    contentDescription = null,
+                                    tint = Color(0xFF4338CA),
+                                    modifier = Modifier.size(24.dp)
+                                )
+                            }
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Column {
+                                Text(
+                                    text = "MONTHLY SALES",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    letterSpacing = 1.sp,
+                                    color = TextSecondary
+                                )
+                                Text(
+                                    text = currentMonthName,
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = Color(0xFF4338CA)
+                                )
+                            }
+                        }
+
+                        LiquidGlassBadge(tint = Color(0xFF4338CA)) {
+                            Text(
+                                text = "$monthBillsCount Bills",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(0xFF4338CA)
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    Text(
+                        text = "$currencySymbol%.2f".format(monthSales),
+                        fontSize = 32.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = Color(0xFF1E1B4B)
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    val avgBill = if (monthBillsCount > 0) monthSales / monthBillsCount else 0.0
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        Text(
+                            text = "Avg Bill: $currencySymbol%.2f".format(avgBill),
+                            fontSize = 12.sp,
+                            color = TextSecondary,
+                            fontWeight = FontWeight.Medium
+                        )
+                        Text(
+                            text = "•",
+                            fontSize = 12.sp,
+                            color = TextSecondary
+                        )
+                        Text(
+                            text = "Today: $currencySymbol%.2f ($todayBillsCount bills)".format(todaySales),
+                            fontSize = 12.sp,
+                            color = GreenPrimary,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+                }
+
                 // 4 Executive KPI Metric Cards (2x2 Grid)
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -149,12 +250,24 @@ fun ReportsScreen(
                     // Card 1: Today's Revenue
                     LiquidGlassCard(
                         modifier = Modifier.weight(1f),
-                        tint = Color.White.copy(alpha = 0.82f),
+                        tint = Color.White.copy(alpha = 0.84f),
                         elevation = 4.dp
                     ) {
-                        Text("TODAY'S SALES", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = TextSecondary)
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text("$currencySymbol%.2f".format(todaySales), fontSize = 22.sp, fontWeight = FontWeight.ExtraBold, color = GreenPrimary)
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(
+                                modifier = Modifier
+                                    .size(32.dp)
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(GreenLight),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(Icons.Default.Payments, contentDescription = null, tint = GreenPrimary, modifier = Modifier.size(18.dp))
+                            }
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("TODAY'S SALES", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = TextSecondary)
+                        }
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text("$currencySymbol%.2f".format(todaySales), fontSize = 20.sp, fontWeight = FontWeight.ExtraBold, color = GreenPrimary)
                         Text("$todayBillsCount receipts", fontSize = 12.sp, color = TextSecondary)
                     }
 
@@ -162,12 +275,24 @@ fun ReportsScreen(
                     val valuation = report?.totalStockValuation ?: 0.0
                     LiquidGlassCard(
                         modifier = Modifier.weight(1f),
-                        tint = Color.White.copy(alpha = 0.82f),
+                        tint = Color.White.copy(alpha = 0.84f),
                         elevation = 4.dp
                     ) {
-                        Text("STOCK WORTH", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = TextSecondary)
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text("$currencySymbol%.0f".format(valuation), fontSize = 22.sp, fontWeight = FontWeight.ExtraBold, color = TextPrimary)
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(
+                                modifier = Modifier
+                                    .size(32.dp)
+                                    .clip(RoundedCornerShape(8.dp))
+                                    .background(Color(0xFFF1F5F9)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(Icons.Default.Receipt, contentDescription = null, tint = TextPrimary, modifier = Modifier.size(18.dp))
+                            }
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("STOCK WORTH", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = TextSecondary)
+                        }
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text("$currencySymbol%.0f".format(valuation), fontSize = 20.sp, fontWeight = FontWeight.ExtraBold, color = TextPrimary)
                         Text("Total inventory", fontSize = 12.sp, color = TextSecondary)
                     }
                 }
@@ -180,12 +305,12 @@ fun ReportsScreen(
                     val outCount = report?.outOfStockCount ?: 0
                     LiquidGlassCard(
                         modifier = Modifier.weight(1f),
-                        tint = if (outCount > 0) AlertRedLight.copy(alpha = 0.85f) else Color.White.copy(alpha = 0.82f),
+                        tint = if (outCount > 0) AlertRedLight.copy(alpha = 0.88f) else Color.White.copy(alpha = 0.84f),
                         elevation = 4.dp
                     ) {
                         Text("OUT OF STOCK", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = if (outCount > 0) AlertRed else TextSecondary)
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text("$outCount items", fontSize = 22.sp, fontWeight = FontWeight.ExtraBold, color = if (outCount > 0) AlertRed else TextPrimary)
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text("$outCount items", fontSize = 20.sp, fontWeight = FontWeight.ExtraBold, color = if (outCount > 0) AlertRed else TextPrimary)
                         Text(if (outCount > 0) "Needs restocking" else "Inventory healthy", fontSize = 12.sp, color = TextSecondary)
                     }
 
@@ -193,20 +318,20 @@ fun ReportsScreen(
                     val lowCount = report?.lowStockCount ?: 0
                     LiquidGlassCard(
                         modifier = Modifier.weight(1f),
-                        tint = Color.White.copy(alpha = 0.82f),
+                        tint = Color.White.copy(alpha = 0.84f),
                         elevation = 4.dp
                     ) {
                         Text("LOW STOCK", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = TextSecondary)
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text("$lowCount items", fontSize = 22.sp, fontWeight = FontWeight.ExtraBold, color = OrangeAccent)
-                        Text("At/below limit", fontSize = 12.sp, color = TextSecondary)
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text("$lowCount items", fontSize = 20.sp, fontWeight = FontWeight.ExtraBold, color = OrangeAccent)
+                        Text("At/below alert limit", fontSize = 12.sp, color = TextSecondary)
                     }
                 }
 
-                // 7-Day Fast Visual Bar Chart (5-Second Readable)
+                // 7-Day Visual Bar Chart with Real Revenue Data
                 LiquidGlassCard(
                     modifier = Modifier.fillMaxWidth(),
-                    tint = Color.White.copy(alpha = 0.85f),
+                    tint = Color.White.copy(alpha = 0.88f),
                     elevation = 4.dp
                 ) {
                     Row(
@@ -214,8 +339,19 @@ fun ReportsScreen(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text("7-Day Sales Trend", fontWeight = FontWeight.Bold, fontSize = 15.sp)
-                        Icon(Icons.Default.TrendingUp, contentDescription = null, tint = GreenPrimary)
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Box(
+                                modifier = Modifier
+                                    .size(28.dp)
+                                    .clip(CircleShape)
+                                    .background(GreenLight),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(Icons.AutoMirrored.Filled.TrendingUp, contentDescription = null, tint = GreenPrimary, modifier = Modifier.size(16.dp))
+                            }
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("7-Day Sales Trend", fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                        }
                     }
 
                     Spacer(modifier = Modifier.height(16.dp))
@@ -230,28 +366,35 @@ fun ReportsScreen(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.Bottom
                     ) {
-                        val days = listOf("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
-                        val sampleHeights = listOf(0.4f, 0.65f, 0.5f, 0.8f, 0.7f, 0.95f, 0.6f)
-
-                        days.forEachIndexed { i, dayName ->
-                            val heightFraction = sampleHeights[i]
-                            val isToday = (i == days.size - 1)
+                        dailyTrend.forEachIndexed { i, point ->
+                            val heightFraction = if (maxVal > 0) ((point.amount / maxVal).toFloat()).coerceIn(0.12f, 1f) else 0.12f
+                            val isToday = (i == dailyTrend.size - 1)
 
                             Column(
                                 horizontalAlignment = Alignment.CenterHorizontally,
                                 verticalArrangement = Arrangement.Bottom,
                                 modifier = Modifier.weight(1f)
                             ) {
+                                if (point.amount > 0) {
+                                    Text(
+                                        text = "$currencySymbol%.0f".format(point.amount),
+                                        fontSize = 9.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = if (isToday) GreenPrimary else TextSecondary
+                                    )
+                                    Spacer(modifier = Modifier.height(2.dp))
+                                }
+
                                 Box(
                                     modifier = Modifier
-                                        .width(24.dp)
+                                        .width(22.dp)
                                         .fillMaxHeight(heightFraction)
                                         .clip(RoundedCornerShape(topStart = 6.dp, topEnd = 6.dp))
                                         .background(if (isToday) GreenPrimary else Color(0xFFCFD8DC))
                                 )
                                 Spacer(modifier = Modifier.height(6.dp))
                                 Text(
-                                    text = dayName,
+                                    text = point.dayLabel,
                                     fontSize = 11.sp,
                                     fontWeight = if (isToday) FontWeight.Bold else FontWeight.Normal,
                                     color = if (isToday) GreenPrimary else TextSecondary
@@ -262,66 +405,66 @@ fun ReportsScreen(
                 }
 
                 // Top Selling Items Leaderboard
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                colors = CardDefaults.cardColors(containerColor = Color.White),
-                shape = RoundedCornerShape(14.dp),
-                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-            ) {
-                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text("Top Selling Items", fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(containerColor = Color.White),
+                    shape = RoundedCornerShape(16.dp),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                ) {
+                    Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Text("Top Selling Items", fontWeight = FontWeight.Bold, fontSize = 15.sp)
 
-                    val topItems = report?.topSellingItems ?: emptyList()
-                    if (topItems.isEmpty()) {
-                        Text("No items billed yet. Top selling items will appear here after sales.", color = TextSecondary, fontSize = 13.sp)
-                    } else {
-                        topItems.forEachIndexed { index, item ->
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Surface(
-                                        color = if (index == 0) Color(0xFFFFD700) else Color(0xFFECEFF1),
-                                        shape = CircleShape,
-                                        modifier = Modifier.size(24.dp)
-                                    ) {
-                                        Box(contentAlignment = Alignment.Center) {
-                                            Text("${index + 1}", fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                        val topItems = report?.topSellingItems ?: emptyList()
+                        if (topItems.isEmpty()) {
+                            Text("No items billed yet. Top selling items will appear here after sales.", color = TextSecondary, fontSize = 13.sp)
+                        } else {
+                            topItems.forEachIndexed { index, item ->
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Surface(
+                                            color = if (index == 0) Color(0xFFFFD700) else Color(0xFFECEFF1),
+                                            shape = CircleShape,
+                                            modifier = Modifier.size(24.dp)
+                                        ) {
+                                            Box(contentAlignment = Alignment.Center) {
+                                                Text("${index + 1}", fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                                            }
+                                        }
+                                        Spacer(modifier = Modifier.width(10.dp))
+                                        Column {
+                                            Text(item.name, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+                                            Text("${item.totalQty.toInt()} sold", fontSize = 12.sp, color = TextSecondary)
                                         }
                                     }
-                                    Spacer(modifier = Modifier.width(10.dp))
-                                    Column {
-                                        Text(item.name, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
-                                        Text("${item.totalQty.toInt()} sold", fontSize = 12.sp, color = TextSecondary)
-                                    }
-                                }
 
-                                Text(
-                                    text = "$currencySymbol%.2f".format(item.totalRevenue),
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 14.sp,
-                                    color = GreenPrimary
-                                )
-                            }
-                            if (index < topItems.size - 1) {
-                                HorizontalDivider(modifier = Modifier.padding(vertical = 2.dp))
+                                    Text(
+                                        text = "$currencySymbol%.2f".format(item.totalRevenue),
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 14.sp,
+                                        color = GreenPrimary
+                                    )
+                                }
+                                if (index < topItems.size - 1) {
+                                    HorizontalDivider(modifier = Modifier.padding(vertical = 2.dp))
+                                }
                             }
                         }
                     }
                 }
-            }
 
-            // Action: View All Inventory
-            LiquidGlassSecondaryButton(
-                onClick = onNavigateToInventory,
-                modifier = Modifier.fillMaxWidth().height(52.dp),
-                shape = RoundedCornerShape(16.dp)
-            ) {
-                Text("Manage Full Inventory & Restock", fontWeight = FontWeight.Bold, color = GreenPrimary)
+                // Action: View All Inventory
+                LiquidGlassSecondaryButton(
+                    onClick = onNavigateToInventory,
+                    modifier = Modifier.fillMaxWidth().height(52.dp),
+                    shape = RoundedCornerShape(16.dp)
+                ) {
+                    Text("Manage Full Inventory & Restock", fontWeight = FontWeight.Bold, color = GreenPrimary)
+                }
             }
         }
     }
-}
 }

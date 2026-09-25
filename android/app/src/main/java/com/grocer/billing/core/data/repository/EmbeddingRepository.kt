@@ -49,7 +49,7 @@ class EmbeddingRepository(
             savedImagePath = saveThumbnailToDisk(itemId, bitmap)
         }
 
-        val entity = EmbeddingEntity(
+        val primaryEntity = EmbeddingEntity(
             id = embeddingId,
             itemId = itemId,
             vector = vectorBlob,
@@ -59,24 +59,67 @@ class EmbeddingRepository(
         )
 
         // 2. Generate simulated multi-lighting variants (dim low-light & bright glare/flash)
-        val lowLightBmp = adjustLighting(bitmap, 0.45f)
-        val highLightBmp = adjustLighting(bitmap, 1.55f)
+        val lowLightBmp = adjustLighting(bitmap, 0.50f)
+        val highLightBmp = adjustLighting(bitmap, 1.50f)
         val lowVectorFloats = embedder.extractEmbedding(lowLightBmp)
         val highVectorFloats = embedder.extractEmbedding(highLightBmp)
         lowLightBmp.recycle()
         highLightBmp.recycle()
 
-        // Also extract a center foreground zoom (0.75x) to guarantee matching across distance/zoom
-        val cropW = (bitmap.width * 0.75f).toInt()
-        val cropH = (bitmap.height * 0.75f).toInt()
-        val startX = ((bitmap.width - cropW) / 2).coerceAtLeast(0)
-        val startY = ((bitmap.height - cropH) / 2).coerceAtLeast(0)
-        val centerBmp = Bitmap.createBitmap(bitmap, startX, startY, cropW, cropH)
-        val centerVectorFloats = embedder.extractEmbedding(centerBmp)
-        centerBmp.recycle()
+        // 3. Generate multi-scale center zoom variants (0.75x zoom and 0.55x tight foreground)
+        val cropW75 = (bitmap.width * 0.75f).toInt()
+        val cropH75 = (bitmap.height * 0.75f).toInt()
+        val startX75 = ((bitmap.width - cropW75) / 2).coerceAtLeast(0)
+        val startY75 = ((bitmap.height - cropH75) / 2).coerceAtLeast(0)
+        val centerBmp75 = Bitmap.createBitmap(bitmap, startX75, startY75, cropW75, cropH75)
+        val centerVector75 = embedder.extractEmbedding(centerBmp75)
+        centerBmp75.recycle()
+
+        val cropW55 = (bitmap.width * 0.55f).toInt()
+        val cropH55 = (bitmap.height * 0.55f).toInt()
+        val startX55 = ((bitmap.width - cropW55) / 2).coerceAtLeast(0)
+        val startY55 = ((bitmap.height - cropH55) / 2).coerceAtLeast(0)
+        val centerBmp55 = Bitmap.createBitmap(bitmap, startX55, startY55, cropW55, cropH55)
+        val centerVector55 = embedder.extractEmbedding(centerBmp55)
+        centerBmp55.recycle()
+
+        val lowEntity = EmbeddingEntity(
+            id = UUID.randomUUID().toString(),
+            itemId = itemId,
+            vector = vectorCache.floatArrayToByteArray(lowVectorFloats),
+            source = "aug_low_light",
+            qualityScore = 0.95f,
+            createdAt = now
+        )
+        val highEntity = EmbeddingEntity(
+            id = UUID.randomUUID().toString(),
+            itemId = itemId,
+            vector = vectorCache.floatArrayToByteArray(highVectorFloats),
+            source = "aug_high_light",
+            qualityScore = 0.95f,
+            createdAt = now
+        )
+        val zoom75Entity = EmbeddingEntity(
+            id = UUID.randomUUID().toString(),
+            itemId = itemId,
+            vector = vectorCache.floatArrayToByteArray(centerVector75),
+            source = "aug_zoom_75",
+            qualityScore = 0.95f,
+            createdAt = now
+        )
+        val zoom55Entity = EmbeddingEntity(
+            id = UUID.randomUUID().toString(),
+            itemId = itemId,
+            vector = vectorCache.floatArrayToByteArray(centerVector55),
+            source = "aug_zoom_55",
+            qualityScore = 0.95f,
+            createdAt = now
+        )
+
+        val allEntities = listOf(primaryEntity, lowEntity, highEntity, zoom75Entity, zoom55Entity)
 
         database.withTransaction {
-            embeddingDao.insertEmbedding(entity)
+            embeddingDao.insertEmbeddings(allEntities)
 
             if (savedImagePath != null) {
                 val item = itemDao.getItemById(itemId)
@@ -96,15 +139,14 @@ class EmbeddingRepository(
             )
         }
 
-        // Live update in-memory VectorCache with original + multi-lighting + center zoom vectors
+        // Live update in-memory VectorCache with original + multi-lighting + multi-zoom vectors
         val currentItem = itemDao.getItemById(itemId)
-        vectorCache.addVector(itemId, vectorFloats, currentItem)
-        vectorCache.addVector(itemId, lowVectorFloats, currentItem)
-        vectorCache.addVector(itemId, highVectorFloats, currentItem)
-        vectorCache.addVector(itemId, centerVectorFloats, currentItem)
+        allEntities.forEach { ent ->
+            vectorCache.addVector(itemId, vectorCache.byteArrayToFloatArray(ent.vector), currentItem)
+        }
         localBackupManager?.triggerAutoBackup(kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO))
 
-        entity
+        primaryEntity
     }
 
     private fun adjustLighting(source: Bitmap, factor: Float): Bitmap {
@@ -140,7 +182,18 @@ class EmbeddingRepository(
                         val bmp = android.graphics.BitmapFactory.decodeFile(file.absolutePath)
                         if (bmp != null) {
                             val floats = embedder.extractEmbedding(bmp)
+                            val blob = vectorCache.floatArrayToByteArray(floats)
                             vectorCache.addVector(item.id, floats, item)
+                            embeddingDao.insertEmbedding(
+                                EmbeddingEntity(
+                                    id = UUID.randomUUID().toString(),
+                                    itemId = item.id,
+                                    vector = blob,
+                                    source = "auto_migrated_thumb",
+                                    qualityScore = 1.0f,
+                                    createdAt = System.currentTimeMillis()
+                                )
+                            )
                             bmp.recycle()
                         }
                     }

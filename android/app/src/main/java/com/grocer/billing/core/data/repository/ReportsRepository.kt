@@ -25,6 +25,8 @@ data class TopItemSummary(
 data class ExecutiveReport(
     val todaySales: Double,
     val todayBillsCount: Int,
+    val monthSales: Double,
+    val monthBillsCount: Int,
     val weeklySales: Double,
     val totalStockValuation: Double,
     val outOfStockCount: Int,
@@ -38,7 +40,6 @@ class ReportsRepository(
     private val database: AppDatabase
 ) {
     suspend fun generateExecutiveReport(shopId: String): ExecutiveReport = withContext(Dispatchers.IO) {
-        val now = System.currentTimeMillis()
         val calendar = Calendar.getInstance().apply {
             set(Calendar.HOUR_OF_DAY, 0)
             set(Calendar.MINUTE, 0)
@@ -47,15 +48,32 @@ class ReportsRepository(
         }
         val startOfToday = calendar.timeInMillis
 
+        // Month start
+        val monthCal = Calendar.getInstance().apply {
+            set(Calendar.DAY_OF_MONTH, 1)
+            set(Calendar.HOUR_OF_DAY, 0)
+            set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }
+        val startOfMonth = monthCal.timeInMillis
+
+        calendar.timeInMillis = startOfToday
         calendar.add(Calendar.DAY_OF_YEAR, -6)
         val sevenDaysAgo = calendar.timeInMillis
 
-        // 1. All bills in shop
-        val allBills = database.billDao().getBillCount(shopId)
-        val bills = database.run {
-            // Fetch recent bills via sqlite query or flow
-            billDao()
-        }
+        // 1. Fetch relevant bills
+        val monthBills = database.billDao().getBillsInRange(shopId, startOfMonth, Long.MAX_VALUE)
+        val todayBills = monthBills.filter { it.createdAt >= startOfToday }
+        val weekBills = database.billDao().getBillsInRange(shopId, sevenDaysAgo, Long.MAX_VALUE)
+
+        val todaySales = todayBills.sumOf { it.total }
+        val todayCount = todayBills.size
+
+        val monthSales = monthBills.sumOf { it.total }
+        val monthCount = monthBills.size
+
+        val weeklySales = weekBills.sumOf { it.total }
 
         // 2. Inventory Metrics
         val items = database.itemDao().searchItems(shopId, "")
@@ -63,7 +81,7 @@ class ReportsRepository(
         val outOfStock = items.filter { it.stockQty <= 0 }
         val lowStock = items.filter { it.stockQty > 0 && it.stockQty <= it.lowStockThreshold }
 
-        // 3. 7-Day Daily Points
+        // 3. 7-Day Daily Points with actual sales
         val dailyFormat = SimpleDateFormat("EEE", Locale.getDefault())
         val dateFormat = SimpleDateFormat("dd MMM", Locale.getDefault())
         val dailyPoints = mutableListOf<DailySalesPoint>()
@@ -77,11 +95,15 @@ class ReportsRepository(
             dayCal.add(Calendar.DAY_OF_YEAR, 1)
             val dayEnd = dayCal.timeInMillis
 
+            val dayTotal = weekBills
+                .filter { it.createdAt in dayStart until dayEnd }
+                .sumOf { it.total }
+
             dailyPoints.add(
                 DailySalesPoint(
                     dayLabel = dailyFormat.format(Date(dayStart)),
                     dateLabel = dateFormat.format(Date(dayStart)),
-                    amount = 0.0 // Populated from bills
+                    amount = dayTotal
                 )
             )
         }
@@ -97,9 +119,11 @@ class ReportsRepository(
         }
 
         ExecutiveReport(
-            todaySales = 0.0,
-            todayBillsCount = 0,
-            weeklySales = 0.0,
+            todaySales = todaySales,
+            todayBillsCount = todayCount,
+            monthSales = monthSales,
+            monthBillsCount = monthCount,
+            weeklySales = weeklySales,
             totalStockValuation = stockValuation,
             outOfStockCount = outOfStock.size,
             lowStockCount = lowStock.size,

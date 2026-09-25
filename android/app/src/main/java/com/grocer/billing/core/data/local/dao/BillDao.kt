@@ -48,6 +48,18 @@ interface BillDao {
     @Query("SELECT COUNT(*) FROM bills WHERE shop_id = :shopId AND created_at >= :startOfDayEpoch")
     fun observeTodayBillsCount(shopId: String, startOfDayEpoch: Long): Flow<Int>
 
+    @Query("SELECT COALESCE(SUM(total), 0.0) FROM bills WHERE shop_id = :shopId AND created_at >= :startOfMonthEpoch")
+    fun observeMonthSalesTotal(shopId: String, startOfMonthEpoch: Long): Flow<Double>
+
+    @Query("SELECT COUNT(*) FROM bills WHERE shop_id = :shopId AND created_at >= :startOfMonthEpoch")
+    fun observeMonthBillsCount(shopId: String, startOfMonthEpoch: Long): Flow<Int>
+
+    @Query("SELECT * FROM bills WHERE shop_id = :shopId AND created_at >= :startOfMonthEpoch ORDER BY created_at DESC")
+    fun observeMonthBills(shopId: String, startOfMonthEpoch: Long): Flow<List<BillEntity>>
+
+    @Query("SELECT * FROM bills WHERE shop_id = :shopId AND created_at >= :startEpoch AND created_at < :endEpoch")
+    suspend fun getBillsInRange(shopId: String, startEpoch: Long, endEpoch: Long): List<BillEntity>
+
     @Query("UPDATE bills SET synced_at = :syncedAt WHERE id = :billId")
     suspend fun markBillSynced(billId: String, syncedAt: Long = System.currentTimeMillis())
 

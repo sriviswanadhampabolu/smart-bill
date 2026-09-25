@@ -1,28 +1,34 @@
 package com.grocer.billing
 
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.ui.draw.clip
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Assessment
-import androidx.compose.material.icons.filled.Inventory
+import androidx.compose.material.icons.filled.Inventory2
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Receipt
-import androidx.compose.material.icons.filled.ReceiptLong
+import androidx.compose.material.icons.automirrored.filled.ReceiptLong
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
@@ -44,6 +50,12 @@ class MainActivity : ComponentActivity() {
         val itemRepo = app.itemRepository
         val billingRepo = app.billingRepository
         val onboardingRepo = app.onboardingRepository
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+                requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 101)
+            }
+        }
 
         setContent {
             KiranaBillingTheme {
@@ -125,6 +137,8 @@ class MainActivity : ComponentActivity() {
                         val shopId = currentShopId.ifBlank { shop?.id ?: "" }
                         val todaySales by billingRepo.observeTodaySales(shopId).collectAsState(initial = 0.0)
                         val todayBillsCount by billingRepo.observeTodayBillsCount(shopId).collectAsState(initial = 0)
+                        val monthSales by billingRepo.observeMonthSales(shopId).collectAsState(initial = 0.0)
+                        val monthBillsCount by billingRepo.observeMonthBillsCount(shopId).collectAsState(initial = 0)
                         val lowStockItems by itemRepo.observeLowStockAlerts(shopId).collectAsState(initial = emptyList())
 
                         // Preload catalog into VectorCache
@@ -138,6 +152,8 @@ class MainActivity : ComponentActivity() {
                             currencySymbol = shop?.currencySymbol ?: "₹",
                             todaySales = todaySales,
                             todayBillsCount = todayBillsCount,
+                            monthSales = monthSales,
+                            monthBillsCount = monthBillsCount,
                             lowStockCount = lowStockItems.size,
                             showResumeSetup = !onboardingRepo.isOnboardingCompleted(),
                             onResumeSetupClicked = { navController.navigate("onboarding_wizard") },
@@ -244,6 +260,52 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+@Composable
+fun QuickActionDashboardCard(
+    modifier: Modifier = Modifier,
+    icon: ImageVector,
+    iconColor: Color,
+    iconBgColor: Color,
+    label: String,
+    onClick: () -> Unit
+) {
+    LiquidGlassCard(
+        modifier = modifier.height(78.dp),
+        shape = RoundedCornerShape(18.dp),
+        tint = Color.White.copy(alpha = 0.88f),
+        elevation = 3.dp,
+        onClick = onClick
+    ) {
+        Column(
+            modifier = Modifier.fillMaxSize(),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(34.dp)
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(iconBgColor),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = iconColor,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+            Spacer(modifier = Modifier.height(6.dp))
+            Text(
+                text = label,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold,
+                color = TextPrimary
+            )
+        }
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun DashboardScreen(
@@ -251,6 +313,8 @@ fun DashboardScreen(
     currencySymbol: String,
     todaySales: Double,
     todayBillsCount: Int,
+    monthSales: Double = 0.0,
+    monthBillsCount: Int = 0,
     lowStockCount: Int,
     showResumeSetup: Boolean = false,
     onResumeSetupClicked: () -> Unit = {},
@@ -286,12 +350,12 @@ fun DashboardScreen(
                             Text(
                                 text = tagline,
                                 fontSize = 11.sp,
-                                color = Color.White.copy(alpha = 0.8f)
+                                color = Color.White.copy(alpha = 0.85f)
                             )
                         }
                     },
                     colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = GreenPrimary.copy(alpha = 0.90f)
+                        containerColor = GreenPrimary.copy(alpha = 0.92f)
                     ),
                     actions = {
                         IconButton(onClick = onLockClicked) {
@@ -351,8 +415,8 @@ fun DashboardScreen(
                 // Today's Sales - Liquid Glass Hero Card
                 LiquidGlassCard(
                     modifier = Modifier.fillMaxWidth(),
-                    tint = Color.White.copy(alpha = 0.82f),
-                    elevation = 10.dp
+                    tint = Color.White.copy(alpha = 0.86f),
+                    elevation = 8.dp
                 ) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
@@ -396,21 +460,46 @@ fun DashboardScreen(
                     Spacer(modifier = Modifier.height(10.dp))
 
                     Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Box(
-                            modifier = Modifier
-                                .size(8.dp)
-                                .clip(androidx.compose.foundation.shape.CircleShape)
-                                .background(GreenPrimary)
-                        )
-                        Text(
-                            text = "$todayBillsCount $receiptsTodayLabel",
-                            fontSize = 13.sp,
-                            color = TextSecondary,
-                            fontWeight = FontWeight.Medium
-                        )
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(8.dp)
+                                    .clip(androidx.compose.foundation.shape.CircleShape)
+                                    .background(GreenPrimary)
+                            )
+                            Text(
+                                text = "$todayBillsCount $receiptsTodayLabel",
+                                fontSize = 13.sp,
+                                color = TextSecondary,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
+
+                        // Monthly sales highlight pill
+                        Surface(
+                            shape = RoundedCornerShape(10.dp),
+                            color = Color(0xFFEEF2FF),
+                            modifier = Modifier.clickable { onReportsClicked() }
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                            ) {
+                                Text(
+                                    text = "Month: $currencySymbol%.0f".format(monthSales),
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFF4338CA)
+                                )
+                            }
+                        }
                     }
                 }
 
@@ -466,82 +555,40 @@ fun DashboardScreen(
                     )
                 }
 
-                // Quick Actions Liquid Glass Grid (3-column)
+                // Quick Actions Liquid Glass Grid (3-column with distinct, vibrant branded badges)
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
-                    LiquidGlassSecondaryButton(
-                        onClick = onInventoryClicked,
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(64.dp),
-                        shape = RoundedCornerShape(18.dp)
-                    ) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Icon(
-                                imageVector = Icons.Default.Inventory,
-                                contentDescription = null,
-                                tint = GreenDark,
-                                modifier = Modifier.size(20.dp)
-                            )
-                            Spacer(modifier = Modifier.height(2.dp))
-                            Text(
-                                text = inventoryLabel,
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = TextPrimary
-                            )
-                        }
-                    }
+                    // Inventory: Fresh Kirana Emerald Badge
+                    QuickActionDashboardCard(
+                        modifier = Modifier.weight(1f),
+                        icon = Icons.Default.Inventory2,
+                        iconColor = Color(0xFF0F766E),
+                        iconBgColor = Color(0xFFE8F5E9),
+                        label = inventoryLabel,
+                        onClick = onInventoryClicked
+                    )
 
-                    LiquidGlassSecondaryButton(
-                        onClick = onReportsClicked,
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(64.dp),
-                        shape = RoundedCornerShape(18.dp)
-                    ) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Icon(
-                                imageVector = Icons.Default.Assessment,
-                                contentDescription = null,
-                                tint = GreenDark,
-                                modifier = Modifier.size(20.dp)
-                            )
-                            Spacer(modifier = Modifier.height(2.dp))
-                            Text(
-                                text = reportsLabel,
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = TextPrimary
-                            )
-                        }
-                    }
+                    // Reports: Royal Indigo Badge
+                    QuickActionDashboardCard(
+                        modifier = Modifier.weight(1f),
+                        icon = Icons.Default.Assessment,
+                        iconColor = Color(0xFF4338CA),
+                        iconBgColor = Color(0xFFEEF2FF),
+                        label = reportsLabel,
+                        onClick = onReportsClicked
+                    )
 
-                    LiquidGlassSecondaryButton(
-                        onClick = onPastBillsClicked,
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(64.dp),
-                        shape = RoundedCornerShape(18.dp)
-                    ) {
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Icon(
-                                imageVector = Icons.Default.ReceiptLong,
-                                contentDescription = null,
-                                tint = GreenDark,
-                                modifier = Modifier.size(20.dp)
-                            )
-                            Spacer(modifier = Modifier.height(2.dp))
-                            Text(
-                                text = pastBillsLabel,
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = TextPrimary
-                            )
-                        }
-                    }
+                    // Past Bills: Warm Amber Badge
+                    QuickActionDashboardCard(
+                        modifier = Modifier.weight(1f),
+                        icon = Icons.AutoMirrored.Filled.ReceiptLong,
+                        iconColor = Color(0xFFC2410C),
+                        iconBgColor = Color(0xFFFFF7ED),
+                        label = pastBillsLabel,
+                        onClick = onPastBillsClicked
+                    )
                 }
             }
         }

@@ -54,4 +54,10 @@ interface ItemDao {
 
     @Query("UPDATE items SET is_active = 0, updated_at = :updatedAt WHERE id = :itemId")
     suspend fun softDeleteItem(itemId: String, updatedAt: Long = System.currentTimeMillis())
+
+    @Query("DELETE FROM items WHERE id = :itemId")
+    suspend fun deleteItemPermanently(itemId: String)
+
+    @Query("UPDATE items SET low_stock_threshold = :threshold, updated_at = :updatedAt WHERE id = :itemId")
+    suspend fun updateLowStockThreshold(itemId: String, threshold: Double, updatedAt: Long = System.currentTimeMillis())
 }

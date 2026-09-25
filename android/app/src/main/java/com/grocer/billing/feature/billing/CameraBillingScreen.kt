@@ -218,9 +218,16 @@ fun CameraBillingScreen(
         }
     }
 
-    // Handle incoming candidates from Camera analyzer without automatic adding
+    var lastCandidateTimestamp by remember { mutableStateOf(0L) }
+
+    // Handle incoming candidates from Camera analyzer with smooth 1.2s persistence decay
     fun onCandidatesFromCamera(matches: List<RecognitionMatch>) {
-        detectedCandidates = matches
+        if (matches.isNotEmpty()) {
+            detectedCandidates = matches
+            lastCandidateTimestamp = System.currentTimeMillis()
+        } else if (System.currentTimeMillis() - lastCandidateTimestamp > 1200L) {
+            detectedCandidates = emptyList()
+        }
     }
 
     fun addRecognizedMatch(match: RecognitionMatch) {

@@ -40,7 +40,8 @@ class BillingRepository(
     private val stockLogDao: StockLogDao,
     private val syncQueueDao: SyncQueueDao,
     private val localBackupManager: com.grocer.billing.core.data.backup.LocalBackupManager? = null,
-    private var syncManager: com.grocer.billing.core.data.sync.SyncManager? = null
+    private var syncManager: com.grocer.billing.core.data.sync.SyncManager? = null,
+    private val context: android.content.Context? = null
 ) {
     fun setSyncManager(manager: com.grocer.billing.core.data.sync.SyncManager) {
         this.syncManager = manager
@@ -55,6 +56,21 @@ class BillingRepository(
     fun observeTodayBillsCount(shopId: String): Flow<Int> {
         val startOfDay = getStartOfDayEpoch()
         return billDao.observeTodayBillsCount(shopId, startOfDay)
+    }
+
+    fun observeMonthSales(shopId: String): Flow<Double> {
+        val startOfMonth = getStartOfMonthEpoch()
+        return billDao.observeMonthSalesTotal(shopId, startOfMonth)
+    }
+
+    fun observeMonthBillsCount(shopId: String): Flow<Int> {
+        val startOfMonth = getStartOfMonthEpoch()
+        return billDao.observeMonthBillsCount(shopId, startOfMonth)
+    }
+
+    fun observeMonthBills(shopId: String): Flow<List<BillEntity>> {
+        val startOfMonth = getStartOfMonthEpoch()
+        return billDao.observeMonthBills(shopId, startOfMonth)
     }
 
     suspend fun getBillItems(billId: String): List<BillItemEntity> = billDao.getBillItems(billId)
@@ -149,6 +165,23 @@ class BillingRepository(
         // Trigger real-time cloud auto-sync
         syncManager?.triggerAutoSync(shopId)
 
+        // Low-stock notification check for items sold
+        context?.let { ctx ->
+            for (line in cartLines) {
+                val updatedItem = itemDao.getItemById(line.item.id)
+                if (updatedItem != null && updatedItem.stockQty <= updatedItem.lowStockThreshold) {
+                    com.grocer.billing.core.notification.StockNotificationManager.sendLowStockNotification(
+                        context = ctx,
+                        itemId = updatedItem.id,
+                        itemName = updatedItem.name,
+                        currentStock = updatedItem.stockQty,
+                        threshold = updatedItem.lowStockThreshold,
+                        unitType = updatedItem.unitType
+                    )
+                }
+            }
+        }
+
         val receiptText = buildReceiptText(
             shopName = shopName,
             billNumber = billNumber,
@@ -177,6 +210,17 @@ class BillingRepository(
 
     private fun getStartOfDayEpoch(): Long {
         val calendar = Calendar.getInstance().apply {
+            set(Calendar.HOUR_OF_DAY, 0)
+            set(Calendar.MINUTE, 0)
+            set(Calendar.SECOND, 0)
+            set(Calendar.MILLISECOND, 0)
+        }
+        return calendar.timeInMillis
+    }
+
+    private fun getStartOfMonthEpoch(): Long {
+        val calendar = Calendar.getInstance().apply {
+            set(Calendar.DAY_OF_MONTH, 1)
             set(Calendar.HOUR_OF_DAY, 0)
             set(Calendar.MINUTE, 0)
             set(Calendar.SECOND, 0)

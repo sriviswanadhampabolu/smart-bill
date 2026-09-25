@@ -13,8 +13,8 @@ data class RecognitionMatch(
 class VectorCache {
 
     companion object {
-        const val HIGH_CONFIDENCE_THRESHOLD = 0.52f
-        const val LOW_CONFIDENCE_THRESHOLD = 0.28f
+        const val HIGH_CONFIDENCE_THRESHOLD = 0.42f
+        const val LOW_CONFIDENCE_THRESHOLD = 0.20f
     }
 
     // In-memory normalized vector entries: (itemId, vectorFloatArray)
@@ -24,6 +24,12 @@ class VectorCache {
     @Synchronized
     fun registerItem(item: ItemEntity) {
         itemMap[item.id] = item
+    }
+
+    @Synchronized
+    fun removeItem(itemId: String) {
+        itemMap.remove(itemId)
+        vectors.removeAll { it.first == itemId }
     }
 
     @Synchronized
@@ -93,7 +99,7 @@ class VectorCache {
         return dot
     }
 
-    private fun byteArrayToFloatArray(bytes: ByteArray): FloatArray {
+    fun byteArrayToFloatArray(bytes: ByteArray): FloatArray {
         val buffer = ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN)
         val floats = FloatArray(bytes.size / 4)
         buffer.asFloatBuffer().get(floats)

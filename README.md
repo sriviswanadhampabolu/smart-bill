@@ -19,7 +19,7 @@
   <br/>
 
   <a href="https://github.com/sriviswanadhampabolu/smart-bill/releases/latest">
-    <img src="https://img.shields.io/badge/Download_APK-v1.0.0_(35.5_MB)-success?style=for-the-badge&logo=android&logoColor=white" alt="Download APK" />
+    <img src="https://img.shields.io/badge/Download_APK-v1.2.0_(37.1_MB)-success?style=for-the-badge&logo=android&logoColor=white" alt="Download APK" />
   </a>
 
 </div>

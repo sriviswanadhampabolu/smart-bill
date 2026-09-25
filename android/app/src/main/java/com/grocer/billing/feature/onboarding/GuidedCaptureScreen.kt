@@ -20,6 +20,7 @@ import androidx.core.content.ContextCompat
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -30,6 +31,8 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Camera
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.FlashOff
+import androidx.compose.material.icons.filled.FlashOn
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -106,6 +109,16 @@ fun GuidedCaptureScreen(
     }
     var isSaving by remember { mutableStateOf(false) }
     var latestFrameBitmap by remember { mutableStateOf<Bitmap?>(null) }
+    var isFlashOn by remember { mutableStateOf(false) }
+    var cameraControl by remember { mutableStateOf<androidx.camera.core.CameraControl?>(null) }
+
+    DisposableEffect(cameraControl) {
+        onDispose {
+            try {
+                cameraControl?.enableTorch(false)
+            } catch (_: Exception) {}
+        }
+    }
 
     // CameraX Capture Use Case
     val imageCapture = remember { ImageCapture.Builder().build() }
@@ -123,6 +136,21 @@ fun GuidedCaptureScreen(
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                    }
+                },
+                actions = {
+                    IconButton(onClick = {
+                        isFlashOn = !isFlashOn
+                        try {
+                            cameraControl?.enableTorch(isFlashOn)
+                            imageCapture.flashMode = if (isFlashOn) ImageCapture.FLASH_MODE_ON else ImageCapture.FLASH_MODE_OFF
+                        } catch (_: Exception) {}
+                    }) {
+                        Icon(
+                            imageVector = if (isFlashOn) Icons.Default.FlashOn else Icons.Default.FlashOff,
+                            contentDescription = if (isFlashOn) "Turn Flash Off" else "Turn Flash On",
+                            tint = if (isFlashOn) Color(0xFFFFD600) else Color.White
+                        )
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -225,13 +253,19 @@ fun GuidedCaptureScreen(
 
                                 try {
                                     cameraProvider.unbindAll()
-                                    cameraProvider.bindToLifecycle(
+                                    val camera = cameraProvider.bindToLifecycle(
                                         lifecycleOwner,
                                         CameraSelector.DEFAULT_BACK_CAMERA,
                                         preview,
                                         imageCapture,
                                         qualityAnalyzer
                                     )
+                                    cameraControl = camera.cameraControl
+                                    if (isFlashOn) {
+                                        try {
+                                            camera.cameraControl.enableTorch(true)
+                                        } catch (_: Exception) {}
+                                    }
                                 } catch (_: Exception) {}
                             }, ContextCompat.getMainExecutor(ctx))
 
@@ -301,6 +335,42 @@ fun GuidedCaptureScreen(
                         fontWeight = FontWeight.Bold,
                         modifier = Modifier.padding(horizontal = 14.dp, vertical = 6.dp)
                     )
+                }
+
+                // Flash On/Off Pill Button Overlay
+                Surface(
+                    shape = RoundedCornerShape(20.dp),
+                    color = if (isFlashOn) Color(0xFFFFD600) else Color.Black.copy(alpha = 0.6f),
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(14.dp)
+                        .clip(RoundedCornerShape(20.dp))
+                        .clickable {
+                            isFlashOn = !isFlashOn
+                            try {
+                                cameraControl?.enableTorch(isFlashOn)
+                                imageCapture.flashMode = if (isFlashOn) ImageCapture.FLASH_MODE_ON else ImageCapture.FLASH_MODE_OFF
+                            } catch (_: Exception) {}
+                        }
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = if (isFlashOn) Icons.Default.FlashOn else Icons.Default.FlashOff,
+                            contentDescription = "Flash Toggle",
+                            tint = if (isFlashOn) Color.Black else Color.White,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(5.dp))
+                        Text(
+                            text = if (isFlashOn) "Flash ON" else "Flash OFF",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = if (isFlashOn) Color.Black else Color.White
+                        )
+                    }
                 }
             }
 

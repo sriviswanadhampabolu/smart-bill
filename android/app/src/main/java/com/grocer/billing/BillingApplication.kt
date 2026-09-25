@@ -40,6 +40,7 @@ class BillingApplication : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        com.grocer.billing.core.notification.StockNotificationManager.initChannel(this)
         com.grocer.billing.core.lang.AppLanguageManager.init(this)
         database = AppDatabase.getInstance(this)
         retrofitClient = RetrofitClient(this)
@@ -94,7 +95,8 @@ class BillingApplication : Application() {
             localBackupManager = localBackupManager,
             syncQueueDao = database.syncQueueDao(),
             syncManager = syncManager,
-            vectorCache = vectorCache
+            vectorCache = vectorCache,
+            context = this
         )
 
         billingRepository = BillingRepository(
@@ -104,7 +106,8 @@ class BillingApplication : Application() {
             stockLogDao = database.stockLogDao(),
             syncQueueDao = database.syncQueueDao(),
             localBackupManager = localBackupManager,
-            syncManager = syncManager
+            syncManager = syncManager,
+            context = this
         )
 
         onboardingRepository = com.grocer.billing.core.data.repository.OnboardingRepository(

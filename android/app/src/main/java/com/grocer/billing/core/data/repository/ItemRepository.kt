@@ -19,7 +19,8 @@ class ItemRepository(
     private val localBackupManager: com.grocer.billing.core.data.backup.LocalBackupManager? = null,
     private val syncQueueDao: SyncQueueDao? = null,
     private var syncManager: SyncManager? = null,
-    private var vectorCache: VectorCache? = null
+    private var vectorCache: VectorCache? = null,
+    private val context: android.content.Context? = null
 ) {
     fun setSyncManager(manager: SyncManager) {
         this.syncManager = manager
@@ -187,6 +188,74 @@ class ItemRepository(
                 )
             )
             syncManager?.triggerAutoSync(currentItem.shopId)
+
+            if (deltaQty < 0 && currentItem.stockQty <= currentItem.lowStockThreshold) {
+                context?.let { ctx ->
+                    com.grocer.billing.core.notification.StockNotificationManager.sendLowStockNotification(
+                        context = ctx,
+                        itemId = currentItem.id,
+                        itemName = currentItem.name,
+                        currentStock = currentItem.stockQty,
+                        threshold = currentItem.lowStockThreshold,
+                        unitType = currentItem.unitType
+                    )
+                }
+            }
+        }
+    }
+
+    suspend fun updateLowStockThreshold(itemId: String, newThreshold: Double) {
+        val now = System.currentTimeMillis()
+        itemDao.updateLowStockThreshold(itemId, newThreshold, now)
+        val currentItem = itemDao.getItemById(itemId)
+        if (currentItem != null) {
+            val payload = """{"low_stock_threshold":$newThreshold}"""
+            syncQueueDao?.enqueue(
+                SyncQueueEntity(
+                    entityType = "item",
+                    entityId = itemId,
+                    operation = "UPDATE",
+                    payloadJson = payload,
+                    createdAt = now
+                )
+            )
+            vectorCache?.registerItem(currentItem)
+            syncManager?.triggerAutoSync(currentItem.shopId)
+
+            if (currentItem.stockQty <= newThreshold) {
+                context?.let { ctx ->
+                    com.grocer.billing.core.notification.StockNotificationManager.sendLowStockNotification(
+                        context = ctx,
+                        itemId = currentItem.id,
+                        itemName = currentItem.name,
+                        currentStock = currentItem.stockQty,
+                        threshold = newThreshold,
+                        unitType = currentItem.unitType
+                    )
+                }
+            }
+        }
+    }
+
+    suspend fun deleteItem(itemId: String) {
+        val currentItem = itemDao.getItemById(itemId)
+        val shopId = currentItem?.shopId ?: getActiveShopId() ?: ""
+        database.withTransaction {
+            itemDao.deleteItemPermanently(itemId)
+            syncQueueDao?.enqueue(
+                SyncQueueEntity(
+                    entityType = "item",
+                    entityId = itemId,
+                    operation = "DELETE",
+                    payloadJson = """{"id":"$itemId"}""",
+                    createdAt = System.currentTimeMillis()
+                )
+            )
+        }
+        vectorCache?.removeItem(itemId)
+        localBackupManager?.triggerAutoBackup(kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO))
+        if (shopId.isNotBlank()) {
+            syncManager?.triggerAutoSync(shopId)
         }
     }
 
