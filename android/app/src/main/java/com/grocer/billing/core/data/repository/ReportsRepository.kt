@@ -22,6 +22,13 @@ data class TopItemSummary(
     val unitType: String
 )
 
+data class TopCategorySummary(
+    val category: String,
+    val totalQty: Double,
+    val totalRevenue: Double,
+    val itemCount: Int
+)
+
 data class ExecutiveReport(
     val todaySales: Double,
     val todayBillsCount: Int,
@@ -33,6 +40,9 @@ data class ExecutiveReport(
     val lowStockCount: Int,
     val dailyTrend: List<DailySalesPoint>,
     val topSellingItems: List<TopItemSummary>,
+    val topSellingItemsByRevenue: List<TopItemSummary>,
+    val topSellingItemsByQuantity: List<TopItemSummary>,
+    val topSellingCategoriesByQuantity: List<TopCategorySummary>,
     val outOfStockItems: List<ItemEntity>
 )
 
@@ -108,13 +118,33 @@ class ReportsRepository(
             )
         }
 
-        // Query actual top selling items from real customer bills
-        val topItems = database.billDao().getTopSellingItems(shopId, limit = 5).map { tuple ->
+        // Query actual top selling items by revenue (Price / Value based)
+        val topItemsByRevenue = database.billDao().getTopSellingItems(shopId, limit = 10).map { tuple ->
             TopItemSummary(
                 name = tuple.name,
                 totalQty = tuple.totalQty,
                 totalRevenue = tuple.totalRevenue,
                 unitType = tuple.unitType
+            )
+        }
+
+        // Query actual top selling items by volume (Quantity based)
+        val topItemsByQuantity = database.billDao().getTopSellingItemsByQuantity(shopId, limit = 10).map { tuple ->
+            TopItemSummary(
+                name = tuple.name,
+                totalQty = tuple.totalQty,
+                totalRevenue = tuple.totalRevenue,
+                unitType = tuple.unitType
+            )
+        }
+
+        // Query top selling product categories by volume (Quantity based)
+        val topCategories = database.billDao().getTopSellingCategoriesByQuantity(shopId, limit = 10).map { tuple ->
+            TopCategorySummary(
+                category = tuple.category,
+                totalQty = tuple.totalQty,
+                totalRevenue = tuple.totalRevenue,
+                itemCount = tuple.itemCount
             )
         }
 
@@ -128,7 +158,10 @@ class ReportsRepository(
             outOfStockCount = outOfStock.size,
             lowStockCount = lowStock.size,
             dailyTrend = dailyPoints,
-            topSellingItems = topItems,
+            topSellingItems = topItemsByRevenue,
+            topSellingItemsByRevenue = topItemsByRevenue,
+            topSellingItemsByQuantity = topItemsByQuantity,
+            topSellingCategoriesByQuantity = topCategories,
             outOfStockItems = outOfStock
         )
     }

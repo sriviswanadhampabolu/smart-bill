@@ -90,6 +90,7 @@ fun LiquidGlassCard(
     elevation: Dp = 6.dp,
     onClick: (() -> Unit)? = null,
     tint: Color = Color.White.copy(alpha = 0.78f),
+    contentPadding: PaddingValues = PaddingValues(18.dp),
     content: @Composable ColumnScope.() -> Unit
 ) {
     val clickModifier = if (onClick != null) {
@@ -145,7 +146,7 @@ fun LiquidGlassCard(
         )
 
         Column(
-            modifier = Modifier.padding(18.dp),
+            modifier = Modifier.padding(contentPadding),
             content = content
         )
     }

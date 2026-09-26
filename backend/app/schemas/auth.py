@@ -17,6 +17,8 @@ class SignupRequest(BaseModel):
     shop_name: str = Field(..., min_length=2, max_length=150)
     owner_name: str = Field(..., min_length=2, max_length=150)
     phone: str = Field(..., min_length=10, max_length=15)
+    email: Optional[str] = None
+    address: Optional[str] = None
     password: Optional[str] = Field(None, min_length=4)
     pin: Optional[str] = Field(None, min_length=4, max_length=4)
     upi_id: Optional[str] = None
@@ -25,7 +27,16 @@ class SignupRequest(BaseModel):
 
 class LoginRequest(BaseModel):
     phone: str
-    password: str
+    password: Optional[str] = None
+    pin: Optional[str] = None
+
+
+class GoogleAuthRequest(BaseModel):
+    email: str
+    display_name: str
+    id_token: Optional[str] = None
+    photo_url: Optional[str] = None
+    phone: Optional[str] = None
 
 
 class PinLoginRequest(BaseModel):
@@ -40,6 +51,9 @@ class SetPinRequest(BaseModel):
 class ShopUpdateRequest(BaseModel):
     name: Optional[str] = None
     owner_name: Optional[str] = None
+    phone: Optional[str] = None
+    email: Optional[str] = None
+    address: Optional[str] = None
     upi_id: Optional[str] = None
     currency_symbol: Optional[str] = None
     settings_json: Optional[Dict[str, Any]] = None
@@ -52,7 +66,9 @@ class ShopResponse(BaseModel):
     name: str
     owner_name: str
     phone: str
-    upi_id: Optional[str]
+    email: Optional[str] = None
+    address: Optional[str] = None
+    upi_id: Optional[str] = None
     currency_symbol: str
     has_pin: bool
     settings_json: Dict[str, Any]

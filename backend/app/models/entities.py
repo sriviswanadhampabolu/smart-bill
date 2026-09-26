@@ -23,6 +23,8 @@ class Shop(Base):
     name = Column(String(150), nullable=False)
     owner_name = Column(String(150), nullable=False)
     phone = Column(String(20), unique=True, nullable=False, index=True)
+    email = Column(String(255), nullable=True, index=True)
+    address = Column(Text, nullable=True)
     upi_id = Column(String(100), nullable=True)
     currency_symbol = Column(String(10), default="₹", nullable=False)
     password_hash = Column(String(255), nullable=True)

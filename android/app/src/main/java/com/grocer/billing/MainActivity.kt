@@ -4,7 +4,7 @@ import android.Manifest
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
-import androidx.activity.ComponentActivity
+import androidx.fragment.app.FragmentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -17,6 +17,7 @@ import androidx.compose.material.icons.filled.Inventory2
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Receipt
 import androidx.compose.material.icons.automirrored.filled.ReceiptLong
+import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -34,14 +35,16 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.grocer.billing.core.data.repository.BillingRepository
 import com.grocer.billing.core.data.repository.ItemRepository
+import com.grocer.billing.feature.account.AccountDashboardScreen
 import com.grocer.billing.feature.auth.AuthScreen
 import com.grocer.billing.feature.auth.PinUnlockScreen
+import com.grocer.billing.feature.auth.StoreRegistrationScreen
 import com.grocer.billing.feature.billing.ManualBillingScreen
 import com.grocer.billing.feature.inventory.InventoryScreen
 import com.grocer.billing.feature.settings.ShopSetupScreen
 import com.grocer.billing.ui.theme.*
 
-class MainActivity : ComponentActivity() {
+class MainActivity : FragmentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val app = application as BillingApplication
@@ -76,10 +79,40 @@ class MainActivity : ComponentActivity() {
                             authRepository = authRepo,
                             localBackupManager = app.localBackupManager,
                             retrofitClient = app.retrofitClient,
-                            onAuthSuccess = {
-                                val dest = if (activeShop == null) "shop_setup" else if (!onboardingRepo.isOnboardingCompleted()) "onboarding_wizard" else "dashboard"
+                            onAuthSuccess = { isNewUser ->
+                                val shop = activeShop
+                                val isComplete = authRepo.hasCompletedStoreProfile(shop)
+                                val dest = when {
+                                    !isComplete -> "store_registration"
+                                    !onboardingRepo.isOnboardingCompleted() -> "onboarding_wizard"
+                                    else -> "dashboard"
+                                }
                                 navController.navigate(dest) {
                                     popUpTo("auth") { inclusive = true }
+                                }
+                            }
+                        )
+                    }
+
+                    composable("store_registration") {
+                        StoreRegistrationScreen(
+                            authRepository = authRepo,
+                            onRegistrationCompleted = {
+                                val dest = if (!onboardingRepo.isOnboardingCompleted()) "onboarding_wizard" else "dashboard"
+                                navController.navigate(dest) {
+                                    popUpTo("store_registration") { inclusive = true }
+                                }
+                            }
+                        )
+                    }
+
+                    composable("account_dashboard") {
+                        AccountDashboardScreen(
+                            authRepository = authRepo,
+                            onNavigateBack = { navController.popBackStack() },
+                            onLogout = {
+                                navController.navigate("auth") {
+                                    popUpTo(0) { inclusive = true }
                                 }
                             }
                         )
@@ -89,9 +122,21 @@ class MainActivity : ComponentActivity() {
                         PinUnlockScreen(
                             authRepository = authRepo,
                             onUnlocked = {
-                                val dest = if (!onboardingRepo.isOnboardingCompleted()) "onboarding_wizard" else "dashboard"
+                                val shop = activeShop
+                                val isComplete = authRepo.hasCompletedStoreProfile(shop)
+                                val dest = when {
+                                    !isComplete -> "store_registration"
+                                    !onboardingRepo.isOnboardingCompleted() -> "onboarding_wizard"
+                                    else -> "dashboard"
+                                }
                                 navController.navigate(dest) {
                                     popUpTo("pin_unlock") { inclusive = true }
+                                }
+                            },
+                            onLogout = {
+                                authRepo.logout()
+                                navController.navigate("auth") {
+                                    popUpTo(0) { inclusive = true }
                                 }
                             }
                         )
@@ -161,6 +206,7 @@ class MainActivity : ComponentActivity() {
                             onInventoryClicked = { navController.navigate("inventory") },
                             onReportsClicked = { navController.navigate("reports") },
                             onPastBillsClicked = { navController.navigate("previous_bills") },
+                            onAccountClicked = { navController.navigate("account_dashboard") },
                             onSettingsClicked = { navController.navigate("shop_setup") },
                             onLockClicked = {
                                 authRepo.lockApp()
@@ -267,12 +313,14 @@ fun QuickActionDashboardCard(
     iconColor: Color,
     iconBgColor: Color,
     label: String,
+    subtitle: String,
     onClick: () -> Unit
 ) {
     LiquidGlassCard(
-        modifier = modifier.height(78.dp),
+        modifier = modifier.height(98.dp),
         shape = RoundedCornerShape(18.dp),
-        tint = Color.White.copy(alpha = 0.88f),
+        tint = Color.White.copy(alpha = 0.90f),
+        contentPadding = PaddingValues(horizontal = 4.dp, vertical = 8.dp),
         elevation = 3.dp,
         onClick = onClick
     ) {
@@ -295,12 +343,20 @@ fun QuickActionDashboardCard(
                     modifier = Modifier.size(20.dp)
                 )
             }
-            Spacer(modifier = Modifier.height(6.dp))
+            Spacer(modifier = Modifier.height(4.dp))
             Text(
                 text = label,
                 fontSize = 12.sp,
-                fontWeight = FontWeight.Bold,
-                color = TextPrimary
+                fontWeight = FontWeight.ExtraBold,
+                color = TextPrimary,
+                maxLines = 1
+            )
+            Text(
+                text = subtitle,
+                fontSize = 10.sp,
+                fontWeight = FontWeight.Medium,
+                color = TextSecondary,
+                maxLines = 1
             )
         }
     }
@@ -322,6 +378,7 @@ fun DashboardScreen(
     onInventoryClicked: () -> Unit,
     onReportsClicked: () -> Unit = {},
     onPastBillsClicked: () -> Unit = {},
+    onAccountClicked: () -> Unit = {},
     onSettingsClicked: () -> Unit,
     onLockClicked: () -> Unit
 ) {
@@ -358,6 +415,9 @@ fun DashboardScreen(
                         containerColor = GreenPrimary.copy(alpha = 0.92f)
                     ),
                     actions = {
+                        IconButton(onClick = onAccountClicked) {
+                            Icon(Icons.Default.AccountCircle, contentDescription = "My Account", tint = Color.White)
+                        }
                         IconButton(onClick = onLockClicked) {
                             Icon(Icons.Default.Lock, contentDescription = "Lock Counter", tint = Color.White)
                         }
@@ -555,10 +615,10 @@ fun DashboardScreen(
                     )
                 }
 
-                // Quick Actions Liquid Glass Grid (3-column with distinct, vibrant branded badges)
+                // Quick Actions Liquid Glass Grid (3-column with distinct, vibrant branded badges & visible operation labels)
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     // Inventory: Fresh Kirana Emerald Badge
                     QuickActionDashboardCard(
@@ -567,6 +627,7 @@ fun DashboardScreen(
                         iconColor = Color(0xFF0F766E),
                         iconBgColor = Color(0xFFE8F5E9),
                         label = inventoryLabel,
+                        subtitle = "Stock & Alert",
                         onClick = onInventoryClicked
                     )
 
@@ -577,6 +638,7 @@ fun DashboardScreen(
                         iconColor = Color(0xFF4338CA),
                         iconBgColor = Color(0xFFEEF2FF),
                         label = reportsLabel,
+                        subtitle = "Analytics",
                         onClick = onReportsClicked
                     )
 
@@ -587,6 +649,7 @@ fun DashboardScreen(
                         iconColor = Color(0xFFC2410C),
                         iconBgColor = Color(0xFFFFF7ED),
                         label = pastBillsLabel,
+                        subtitle = "History",
                         onClick = onPastBillsClicked
                     )
                 }

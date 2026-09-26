@@ -13,6 +13,10 @@ data class ShopEntity(
     @ColumnInfo(name = "owner_name")
     val ownerName: String,
     val phone: String,
+    @ColumnInfo(name = "email")
+    val email: String? = null,
+    @ColumnInfo(name = "address", defaultValue = "")
+    val address: String = "",
     @ColumnInfo(name = "upi_id")
     val upiId: String? = null,
     @ColumnInfo(name = "currency_symbol", defaultValue = "₹")

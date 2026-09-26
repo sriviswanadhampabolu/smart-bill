@@ -76,6 +76,35 @@ interface BillDao {
         LIMIT :limit
     """)
     suspend fun getTopSellingItems(shopId: String, limit: Int = 5): List<TopSellingItemTuple>
+
+    @Query("""
+        SELECT bi.name_snapshot AS name,
+               SUM(bi.qty) AS totalQty,
+               SUM(bi.line_total) AS totalRevenue,
+               bi.unit_type AS unitType
+        FROM bill_items bi
+        INNER JOIN bills b ON bi.bill_id = b.id
+        WHERE b.shop_id = :shopId
+        GROUP BY bi.name_snapshot, bi.unit_type
+        ORDER BY totalQty DESC
+        LIMIT :limit
+    """)
+    suspend fun getTopSellingItemsByQuantity(shopId: String, limit: Int = 5): List<TopSellingItemTuple>
+
+    @Query("""
+        SELECT COALESCE(i.category, 'General') AS category,
+               SUM(bi.qty) AS totalQty,
+               SUM(bi.line_total) AS totalRevenue,
+               COUNT(DISTINCT bi.name_snapshot) AS itemCount
+        FROM bill_items bi
+        INNER JOIN bills b ON bi.bill_id = b.id
+        LEFT JOIN items i ON bi.item_id = i.id
+        WHERE b.shop_id = :shopId
+        GROUP BY COALESCE(i.category, 'General')
+        ORDER BY totalQty DESC
+        LIMIT :limit
+    """)
+    suspend fun getTopSellingCategoriesByQuantity(shopId: String, limit: Int = 5): List<TopSellingCategoryTuple>
 }
 
 data class TopSellingItemTuple(
@@ -83,5 +112,12 @@ data class TopSellingItemTuple(
     val totalQty: Double,
     val totalRevenue: Double,
     val unitType: String
+)
+
+data class TopSellingCategoryTuple(
+    val category: String,
+    val totalQty: Double,
+    val totalRevenue: Double,
+    val itemCount: Int
 )
 

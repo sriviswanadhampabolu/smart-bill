@@ -11,10 +11,30 @@ data class SignupRequestDto(
     val shop_name: String,
     val owner_name: String,
     val phone: String,
+    val email: String? = null,
+    val address: String? = null,
     val pin: String? = null,
     val password: String? = null,
     val upi_id: String? = null,
     val currency_symbol: String = "₹"
+)
+
+data class GoogleAuthRequestDto(
+    val email: String,
+    val display_name: String,
+    val id_token: String? = null,
+    val photo_url: String? = null,
+    val phone: String? = null
+)
+
+data class ShopUpdateRequestDto(
+    val name: String? = null,
+    val owner_name: String? = null,
+    val phone: String? = null,
+    val email: String? = null,
+    val address: String? = null,
+    val upi_id: String? = null,
+    val currency_symbol: String? = null
 )
 
 data class PinLoginRequestDto(
@@ -125,12 +145,28 @@ data class SyncPullResponseDto(
     val bill_items: List<SyncPullBillItemDto> = emptyList()
 )
 
+data class HealthResponseDto(
+    val status: String,
+    val database: String,
+    val provider: String? = null,
+    val neon_data_api_url: String? = null
+)
+
 interface SyncApiService {
+    @GET("health")
+    suspend fun checkHealth(): Response<HealthResponseDto>
+
     @POST("api/v1/auth/signup")
     suspend fun signup(@Body request: SignupRequestDto): Response<TokenResponseDto>
 
     @POST("api/v1/auth/pin-login")
     suspend fun pinLogin(@Body request: PinLoginRequestDto): Response<TokenResponseDto>
+
+    @POST("api/v1/auth/google")
+    suspend fun googleAuth(@Body request: GoogleAuthRequestDto): Response<TokenResponseDto>
+
+    @retrofit2.http.PUT("api/v1/shop/profile")
+    suspend fun updateShopProfile(@Body request: ShopUpdateRequestDto): Response<Any>
 
     @POST("api/v1/sync/push")
     suspend fun pushSyncQueue(@Body request: SyncPushRequestDto): Response<SyncPushResponseDto>

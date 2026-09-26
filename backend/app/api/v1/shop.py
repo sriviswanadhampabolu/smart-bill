@@ -21,6 +21,8 @@ def get_shop_profile(current_shop: Shop = Depends(get_current_shop)):
         name=current_shop.name,
         owner_name=current_shop.owner_name,
         phone=current_shop.phone,
+        email=current_shop.email,
+        address=current_shop.address,
         upi_id=current_shop.upi_id,
         currency_symbol=current_shop.currency_symbol,
         has_pin=current_shop.pin_hash is not None,
@@ -40,6 +42,12 @@ def update_shop_profile(
         current_shop.name = request.name.strip()
     if request.owner_name is not None:
         current_shop.owner_name = request.owner_name.strip()
+    if request.phone is not None:
+        current_shop.phone = request.phone.strip()
+    if request.email is not None:
+        current_shop.email = request.email.strip()
+    if request.address is not None:
+        current_shop.address = request.address.strip()
     if request.upi_id is not None:
         current_shop.upi_id = request.upi_id.strip() if request.upi_id else None
     if request.currency_symbol is not None:
@@ -61,6 +69,8 @@ def update_shop_profile(
         name=current_shop.name,
         owner_name=current_shop.owner_name,
         phone=current_shop.phone,
+        email=current_shop.email,
+        address=current_shop.address,
         upi_id=current_shop.upi_id,
         currency_symbol=current_shop.currency_symbol,
         has_pin=current_shop.pin_hash is not None,

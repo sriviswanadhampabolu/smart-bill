@@ -3,14 +3,26 @@ from typing import Optional
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(case_sensitive=True, env_file=".env", extra="ignore")
+    model_config = SettingsConfigDict(
+        case_sensitive=True,
+        env_file=(".env", "../.env.local", ".env.local"),
+        extra="ignore"
+    )
 
     PROJECT_NAME: str = "Kirana Billing API"
     VERSION: str = "1.0.0"
     API_V1_STR: str = "/api/v1"
     
-    # Default to SQLite for zero-setup local dev; easily overridden by postgresql://...
-    DATABASE_URL: str = "sqlite:///./grocery_backend.db"
+    # Neon Online Cloud PostgreSQL Connection (Endpoint: ep-old-grass-b4k9t8zp)
+    DATABASE_URL: str = (
+        "postgresql://neondb_owner:npg_YT86SNxVpLFE@ep-old-grass-b4k9t8zp.c-6.us-east-2.aws.neon.tech/neondb?sslmode=require"
+    )
+    DATABASE_URL_POOLED: str = (
+        "postgresql://neondb_owner:npg_YT86SNxVpLFE@ep-old-grass-b4k9t8zp-pooler.c-6.us-east-2.aws.neon.tech/neondb?sslmode=require"
+    )
+    NEON_DATA_API_URL: str = (
+        "https://ep-old-grass-b4k9t8zp.apirest.c-6.us-east-2.aws.neon.tech/neondb/rest/v1"
+    )
 
     @property
     def sync_database_url(self) -> str:

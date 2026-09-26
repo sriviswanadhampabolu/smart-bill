@@ -1,6 +1,7 @@
 package com.grocer.billing.feature.reports
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -405,51 +406,246 @@ fun ReportsScreen(
                 }
 
                 // Top Selling Items Leaderboard
+                // Dual-Mode Performance Reports (Price/Revenue vs Quantity vs Categories)
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     colors = CardDefaults.cardColors(containerColor = Color.White),
                     shape = RoundedCornerShape(16.dp),
                     elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
                 ) {
-                    Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                        Text("Top Selling Items", fontWeight = FontWeight.Bold, fontSize = 15.sp)
+                    var reportTab by remember { mutableStateOf(0) } // 0: By Revenue, 1: By Quantity, 2: By Category
 
-                        val topItems = report?.topSellingItems ?: emptyList()
-                        if (topItems.isEmpty()) {
-                            Text("No items billed yet. Top selling items will appear here after sales.", color = TextSecondary, fontSize = 13.sp)
-                        } else {
-                            topItems.forEachIndexed { index, item ->
-                                Row(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Row(verticalAlignment = Alignment.CenterVertically) {
-                                        Surface(
-                                            color = if (index == 0) Color(0xFFFFD700) else Color(0xFFECEFF1),
-                                            shape = CircleShape,
-                                            modifier = Modifier.size(24.dp)
-                                        ) {
-                                            Box(contentAlignment = Alignment.Center) {
-                                                Text("${index + 1}", fontWeight = FontWeight.Bold, fontSize = 11.sp)
-                                            }
-                                        }
-                                        Spacer(modifier = Modifier.width(10.dp))
-                                        Column {
-                                            Text(item.name, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
-                                            Text("${item.totalQty.toInt()} sold", fontSize = 12.sp, color = TextSecondary)
-                                        }
-                                    }
+                    Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "Sales Performance Breakdown",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 16.sp,
+                                color = TextPrimary
+                            )
+                        }
 
+                        // 3-Way Pill Switcher
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(40.dp)
+                                .clip(RoundedCornerShape(20.dp))
+                                .background(Color(0xFFF1F5F9))
+                                .padding(3.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            // Tab 0: Revenue based
+                            Surface(
+                                shape = RoundedCornerShape(18.dp),
+                                color = if (reportTab == 0) GreenPrimary else Color.Transparent,
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .fillMaxHeight()
+                                    .clickable { reportTab = 0 }
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
                                     Text(
-                                        text = "$currencySymbol%.2f".format(item.totalRevenue),
+                                        text = "By Revenue",
                                         fontWeight = FontWeight.Bold,
-                                        fontSize = 14.sp,
-                                        color = GreenPrimary
+                                        fontSize = 11.sp,
+                                        color = if (reportTab == 0) Color.White else TextSecondary
                                     )
                                 }
-                                if (index < topItems.size - 1) {
-                                    HorizontalDivider(modifier = Modifier.padding(vertical = 2.dp))
+                            }
+
+                            // Tab 1: Quantity based
+                            Surface(
+                                shape = RoundedCornerShape(18.dp),
+                                color = if (reportTab == 1) Color(0xFF4338CA) else Color.Transparent,
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .fillMaxHeight()
+                                    .clickable { reportTab = 1 }
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Text(
+                                        text = "By Quantity",
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 11.sp,
+                                        color = if (reportTab == 1) Color.White else TextSecondary
+                                    )
+                                }
+                            }
+
+                            // Tab 2: Category volume
+                            Surface(
+                                shape = RoundedCornerShape(18.dp),
+                                color = if (reportTab == 2) Color(0xFF0F766E) else Color.Transparent,
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .fillMaxHeight()
+                                    .clickable { reportTab = 2 }
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Text(
+                                        text = "Categories",
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 11.sp,
+                                        color = if (reportTab == 2) Color.White else TextSecondary
+                                    )
+                                }
+                            }
+                        }
+
+                        when (reportTab) {
+                            0 -> {
+                                // 1. By Revenue (Highest price / sales value products)
+                                val items = report?.topSellingItemsByRevenue ?: emptyList()
+                                if (items.isEmpty()) {
+                                    Text("No bills recorded yet. Top revenue products will appear here.", color = TextSecondary, fontSize = 13.sp)
+                                } else {
+                                    Text("Ranked by highest sales value (Price × Qty):", fontSize = 12.sp, color = TextSecondary)
+                                    items.forEachIndexed { index, item ->
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                Surface(
+                                                    color = when (index) {
+                                                        0 -> Color(0xFFFFD700)
+                                                        1 -> Color(0xFFCFD8DC)
+                                                        2 -> Color(0xFFD7CCC8)
+                                                        else -> Color(0xFFECEFF1)
+                                                    },
+                                                    shape = CircleShape,
+                                                    modifier = Modifier.size(26.dp)
+                                                ) {
+                                                    Box(contentAlignment = Alignment.Center) {
+                                                        Text("${index + 1}", fontWeight = FontWeight.Bold, fontSize = 11.sp)
+                                                    }
+                                                }
+                                                Spacer(modifier = Modifier.width(10.dp))
+                                                Column {
+                                                    Text(item.name, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+                                                    Text(
+                                                        if (item.unitType == "weight") "%.2f kg sold".format(item.totalQty) else "${item.totalQty.toInt()} pcs sold",
+                                                        fontSize = 12.sp,
+                                                        color = TextSecondary
+                                                    )
+                                                }
+                                            }
+
+                                            Text(
+                                                text = "$currencySymbol%.2f".format(item.totalRevenue),
+                                                fontWeight = FontWeight.ExtraBold,
+                                                fontSize = 15.sp,
+                                                color = GreenPrimary
+                                            )
+                                        }
+                                        if (index < items.size - 1) {
+                                            HorizontalDivider(modifier = Modifier.padding(vertical = 3.dp), color = Color(0xFFF1F5F9))
+                                        }
+                                    }
+                                }
+                            }
+                            1 -> {
+                                // 2. By Quantity (Volume based, regardless of price)
+                                val items = report?.topSellingItemsByQuantity ?: emptyList()
+                                if (items.isEmpty()) {
+                                    Text("No bills recorded yet. Highest quantity products will appear here.", color = TextSecondary, fontSize = 13.sp)
+                                } else {
+                                    Text("Ranked by highest units/volume sold (Quantity based):", fontSize = 12.sp, color = TextSecondary)
+                                    items.forEachIndexed { index, item ->
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                Surface(
+                                                    color = Color(0xFFEEF2FF),
+                                                    shape = CircleShape,
+                                                    modifier = Modifier.size(26.dp)
+                                                ) {
+                                                    Box(contentAlignment = Alignment.Center) {
+                                                        Text("${index + 1}", fontWeight = FontWeight.Bold, fontSize = 11.sp, color = Color(0xFF4338CA))
+                                                    }
+                                                }
+                                                Spacer(modifier = Modifier.width(10.dp))
+                                                Column {
+                                                    Text(item.name, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+                                                    Text("Revenue: $currencySymbol%.2f".format(item.totalRevenue), fontSize = 12.sp, color = TextSecondary)
+                                                }
+                                            }
+
+                                            Surface(
+                                                color = Color(0xFFEEF2FF),
+                                                shape = RoundedCornerShape(8.dp)
+                                            ) {
+                                                Text(
+                                                    text = if (item.unitType == "weight") "%.2f kg".format(item.totalQty) else "${item.totalQty.toInt()} pcs",
+                                                    fontWeight = FontWeight.ExtraBold,
+                                                    fontSize = 13.sp,
+                                                    color = Color(0xFF4338CA),
+                                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                                )
+                                            }
+                                        }
+                                        if (index < items.size - 1) {
+                                            HorizontalDivider(modifier = Modifier.padding(vertical = 3.dp), color = Color(0xFFF1F5F9))
+                                        }
+                                    }
+                                }
+                            }
+                            2 -> {
+                                // 3. Top Selling Categories (Quantity based)
+                                val cats = report?.topSellingCategoriesByQuantity ?: emptyList()
+                                if (cats.isEmpty()) {
+                                    Text("No category sales recorded yet.", color = TextSecondary, fontSize = 13.sp)
+                                } else {
+                                    Text("Product categories ranked by total quantity sold:", fontSize = 12.sp, color = TextSecondary)
+                                    cats.forEachIndexed { index, cat ->
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            horizontalArrangement = Arrangement.SpaceBetween,
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                                Surface(
+                                                    color = Color(0xFFE8F5E9),
+                                                    shape = CircleShape,
+                                                    modifier = Modifier.size(26.dp)
+                                                ) {
+                                                    Box(contentAlignment = Alignment.Center) {
+                                                        Text("${index + 1}", fontWeight = FontWeight.Bold, fontSize = 11.sp, color = Color(0xFF0F766E))
+                                                    }
+                                                }
+                                                Spacer(modifier = Modifier.width(10.dp))
+                                                Column {
+                                                    Text(cat.category, fontWeight = FontWeight.SemiBold, fontSize = 14.sp)
+                                                    Text("${cat.itemCount} products · $currencySymbol%.2f".format(cat.totalRevenue), fontSize = 12.sp, color = TextSecondary)
+                                                }
+                                            }
+
+                                            Surface(
+                                                color = Color(0xFFE0F2F1),
+                                                shape = RoundedCornerShape(8.dp)
+                                            ) {
+                                                Text(
+                                                    text = "%.1f units".format(cat.totalQty),
+                                                    fontWeight = FontWeight.ExtraBold,
+                                                    fontSize = 13.sp,
+                                                    color = Color(0xFF0F766E),
+                                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                                )
+                                            }
+                                        }
+                                        if (index < cats.size - 1) {
+                                            HorizontalDivider(modifier = Modifier.padding(vertical = 3.dp), color = Color(0xFFF1F5F9))
+                                        }
+                                    }
                                 }
                             }
                         }

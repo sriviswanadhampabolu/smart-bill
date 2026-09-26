@@ -8,6 +8,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Backspace
+import androidx.compose.material.icons.filled.Fingerprint
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -15,24 +16,56 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.BorderStroke
+import androidx.fragment.app.FragmentActivity
 import com.grocer.billing.core.data.repository.AuthRepository
+import com.grocer.billing.core.security.BiometricAuthManager
 import com.grocer.billing.ui.theme.*
 import kotlinx.coroutines.launch
 
 @Composable
 fun PinUnlockScreen(
     authRepository: AuthRepository,
-    onUnlocked: () -> Unit
+    onUnlocked: () -> Unit,
+    onLogout: (() -> Unit)? = null
 ) {
+    val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
     var enteredPin by remember { mutableStateOf("") }
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var showChangePinDialog by remember { mutableStateOf(false) }
     val activeShop by authRepository.observeActiveShop().collectAsState(initial = null)
+
+    val isBiometricAvailable = remember { BiometricAuthManager.isBiometricAvailable(context) }
+    val isBiometricEnabled = remember { authRepository.isBiometricEnabled() }
+    val activity = context as? FragmentActivity
+
+    fun triggerBiometrics() {
+        if (activity != null && isBiometricAvailable && isBiometricEnabled) {
+            BiometricAuthManager.authenticate(
+                activity = activity,
+                title = "Unlock Smart Bill",
+                subtitle = "Touch fingerprint sensor to unlock counter",
+                onSuccess = {
+                    authRepository.unlockApp()
+                    onUnlocked()
+                },
+                onError = { err ->
+                    errorMessage = err
+                }
+            )
+        }
+    }
+
+    LaunchedEffect(Unit) {
+        if (isBiometricAvailable && isBiometricEnabled) {
+            triggerBiometrics()
+        }
+    }
 
     fun onNumberClick(digit: String) {
         if (enteredPin.length < 4) {
@@ -69,7 +102,7 @@ fun PinUnlockScreen(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.SpaceBetween
         ) {
-            // Top section: Shop info & Frosted Glass Lock Lens
+            // Top section: Shop info & Lock Lens
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 modifier = Modifier.padding(top = 36.dp)
@@ -96,46 +129,38 @@ fun PinUnlockScreen(
                 Spacer(modifier = Modifier.height(16.dp))
 
                 Text(
-                    text = activeShop?.name ?: "Kirana Billing",
-                    fontSize = 26.sp,
+                    text = activeShop?.name ?: "Smart Bill Counter",
+                    fontSize = 24.sp,
                     fontWeight = FontWeight.ExtraBold,
                     color = TextPrimary
                 )
+
                 Text(
-                    text = "Enter 4-digit PIN to open counter",
-                    fontSize = 14.sp,
+                    text = if (isBiometricAvailable && isBiometricEnabled) "Touch fingerprint sensor or enter PIN" else "Enter 4-digit PIN to unlock counter",
+                    fontSize = 13.sp,
                     color = TextSecondary,
                     modifier = Modifier.padding(top = 4.dp)
                 )
 
                 Spacer(modifier = Modifier.height(28.dp))
 
-                // 4-Dot Liquid Glass PIN Indicator
+                // PIN Digits Indicator Dots
                 Row(
-                    horizontalArrangement = Arrangement.spacedBy(18.dp),
+                    horizontalArrangement = Arrangement.spacedBy(16.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    repeat(4) { index ->
-                        val isFilled = index < enteredPin.length
+                    for (i in 0 until 4) {
+                        val isFilled = i < enteredPin.length
                         Box(
                             modifier = Modifier
-                                .size(22.dp)
+                                .size(18.dp)
                                 .clip(CircleShape)
                                 .background(
-                                    if (isFilled) {
-                                        androidx.compose.ui.graphics.Brush.radialGradient(
-                                            listOf(Color(0xFF2E7D32), GreenPrimary)
-                                        )
-                                    } else {
-                                        androidx.compose.ui.graphics.Brush.radialGradient(
-                                            listOf(Color.White.copy(alpha = 0.6f), Color.White.copy(alpha = 0.2f))
-                                        )
-                                    }
+                                    if (isFilled) GreenPrimary else Color.White.copy(alpha = 0.5f)
                                 )
                                 .border(
-                                    width = 1.5.dp,
-                                    color = if (isFilled) GreenPrimary else GlassBorderHighlight,
-                                    shape = CircleShape
+                                    BorderStroke(1.5.dp, if (isFilled) GreenPrimary else Color(0xFFB0BEC5)),
+                                    CircleShape
                                 )
                         )
                     }
@@ -146,7 +171,7 @@ fun PinUnlockScreen(
                     Text(
                         text = errorMessage ?: "",
                         color = AlertRed,
-                        fontSize = 14.sp,
+                        fontSize = 13.sp,
                         fontWeight = FontWeight.Bold
                     )
                 }
@@ -156,14 +181,15 @@ fun PinUnlockScreen(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(bottom = 20.dp),
+                    .padding(bottom = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
+                val hasBiometrics = isBiometricAvailable && isBiometricEnabled
                 val rows = listOf(
                     listOf("1", "2", "3"),
                     listOf("4", "5", "6"),
                     listOf("7", "8", "9"),
-                    listOf("CLEAR", "0", "BACK")
+                    listOf(if (hasBiometrics) "BIO" else "CLEAR", "0", "BACK")
                 )
 
                 for (row in rows) {
@@ -172,29 +198,32 @@ fun PinUnlockScreen(
                         horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
                         for (key in row) {
-                            val isAction = key in listOf("CLEAR", "BACK")
+                            val isAction = key in listOf("CLEAR", "BACK", "BIO")
                             Box(
                                 modifier = Modifier
                                     .weight(1f)
                                     .height(68.dp)
                                     .clip(RoundedCornerShape(20.dp))
                                     .background(
-                                        if (isAction) {
+                                        if (key == "BIO") {
+                                            Color(0xFFE8F5E9)
+                                        } else if (isAction) {
                                             Color.White.copy(alpha = 0.55f)
                                         } else {
-                                            Color.White.copy(alpha = 0.82f)
+                                            Color.White.copy(alpha = 0.85f)
                                         }
                                     )
                                     .border(
                                         BorderStroke(
                                             1.2.dp,
-                                            if (isAction) GlassBorderSubtle else GlassBorderHighlight
+                                            if (key == "BIO") GreenPrimary.copy(alpha = 0.6f) else if (isAction) GlassBorderSubtle else GlassBorderHighlight
                                         ),
                                         RoundedCornerShape(20.dp)
                                     )
                                     .clickable {
                                         when (key) {
                                             "CLEAR" -> enteredPin = ""
+                                            "BIO" -> triggerBiometrics()
                                             "BACK" -> onBackspaceClick()
                                             else -> onNumberClick(key)
                                         }
@@ -203,6 +232,7 @@ fun PinUnlockScreen(
                             ) {
                                 when (key) {
                                     "CLEAR" -> Text("CLR", fontSize = 15.sp, fontWeight = FontWeight.ExtraBold, color = TextSecondary)
+                                    "BIO" -> Icon(Icons.Default.Fingerprint, contentDescription = "Fingerprint", tint = GreenPrimary, modifier = Modifier.size(32.dp))
                                     "BACK" -> Icon(Icons.AutoMirrored.Filled.Backspace, contentDescription = "Back", tint = TextSecondary)
                                     else -> Text(key, fontSize = 28.sp, fontWeight = FontWeight.ExtraBold, color = TextPrimary)
                                 }
@@ -211,18 +241,30 @@ fun PinUnlockScreen(
                     }
                 }
 
-                // Change PIN option
+                // Change PIN & Switch Account Options
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.Center
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
                     TextButton(onClick = { showChangePinDialog = true }) {
                         Text(
-                            text = "Change PIN / Reset",
+                            text = "Reset PIN",
                             color = GreenPrimary,
-                            fontSize = 15.sp,
+                            fontSize = 14.sp,
                             fontWeight = FontWeight.Bold
                         )
+                    }
+
+                    if (onLogout != null) {
+                        TextButton(onClick = onLogout) {
+                            Text(
+                                text = "Logout / Switch Store",
+                                color = TextSecondary,
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
                     }
                 }
             }
@@ -266,7 +308,7 @@ fun ChangePinDialog(
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 Text(
-                    text = "Verify your current PIN or registered phone (${activeShop?.phone ?: "registered phone"}) to set a new 4-digit PIN.",
+                    text = "Verify your current PIN or registered phone to set a new 4-digit PIN.",
                     fontSize = 13.sp,
                     color = TextSecondary
                 )
@@ -354,4 +396,3 @@ fun ChangePinDialog(
         }
     )
 }
-
