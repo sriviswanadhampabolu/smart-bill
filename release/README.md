@@ -62,12 +62,12 @@ This folder contains pre-built Android application packages (`.apk`) for **Smart
 ## 🚀 How to Install on Your Android Phone
 
 1. **Download the APK**:
-   - Download [`SmartBill-v1.2.0.apk`](./SmartBill-v1.2.0.apk) directly to your device or transfer it via USB / Quick Share / WhatsApp.
+   - Download [`SmartBill-v1.3.0.apk`](./SmartBill-v1.3.0.apk) directly to your device or transfer it via USB / Quick Share / WhatsApp.
 2. **Enable Unknown Sources** (First time only):
    - Open **Settings** &rarr; **Security** (or **Apps & notifications**).
    - Tap **Install unknown apps** and toggle **Allow from this source** for your browser or file manager.
 3. **Install**:
-   - Tap on the downloaded `SmartBill-v1.2.0.apk` file and select **Install**.
+   - Tap on the downloaded `SmartBill-v1.3.0.apk` file and select **Install**.
 4. **Permissions**:
    - Grant **Camera permission** for visual item detection and barcode scanning.
    - Grant **Notification permission** on Android 13+ to receive instant low-stock alerts.
