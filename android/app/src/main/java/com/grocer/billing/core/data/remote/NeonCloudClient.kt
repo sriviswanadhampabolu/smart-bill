@@ -139,7 +139,7 @@ class NeonCloudClient(private val context: Context) {
 
             val insertSql = """
                 INSERT INTO shops (id, name, owner_name, phone, email, address, upi_id, currency_symbol, pin_hash, settings_json, created_at, updated_at)
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12);
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW(), NOW());
             """.trimIndent()
 
             val settingsJson = JSONObject().apply {
@@ -159,9 +159,7 @@ class NeonCloudClient(private val context: Context) {
                     upiId?.trim()?.ifBlank { null },
                     currencySymbol,
                     pinHash,
-                    settingsJson,
-                    now,
-                    now
+                    settingsJson
                 )
             )
 
@@ -201,12 +199,13 @@ class NeonCloudClient(private val context: Context) {
 
             val row = rows.getJSONObject(0)
             val storedPinHash = row.optString("pin_hash", "")
-            val defaultPinHash = hashPin("1234")
 
-            // Verify PIN hash
-            val isPinValid = (storedPinHash == inputPinHash) ||
-                    (storedPinHash.isBlank() && cleanPin == "1234") ||
-                    (storedPinHash == defaultPinHash && cleanPin == "1234")
+            // Strictly verify PIN hash: registered PIN must match input PIN
+            val isPinValid = if (storedPinHash.isNotBlank()) {
+                storedPinHash == inputPinHash
+            } else {
+                cleanPin == "1234"
+            }
 
             if (!isPinValid) {
                 return@withContext Result.failure(Exception("Incorrect 4-digit PIN for this mobile number. Please check and try again."))
@@ -273,12 +272,12 @@ class NeonCloudClient(private val context: Context) {
 
             val insertSql = """
                 INSERT INTO shops (id, name, owner_name, phone, email, address, upi_id, currency_symbol, pin_hash, settings_json, created_at, updated_at)
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12);
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW(), NOW());
             """.trimIndent()
 
             executeQuery(
                 insertSql,
-                listOf(shopId, name, owner, cleanPhone, cleanEmail, "", null, "₹", pinHash, settingsJson, now, now)
+                listOf(shopId, name, owner, cleanPhone, cleanEmail, "", null, "₹", pinHash, settingsJson)
             )
 
             val shop = ShopEntity(
@@ -305,8 +304,8 @@ class NeonCloudClient(private val context: Context) {
         try {
             val sql = """
                 UPDATE shops SET name = $1, owner_name = $2, phone = $3, email = $4, address = $5,
-                upi_id = $6, currency_symbol = $7, pin_hash = $8, settings_json = $9, updated_at = $10
-                WHERE id = $11;
+                upi_id = $6, currency_symbol = $7, pin_hash = $8, settings_json = $9, updated_at = NOW()
+                WHERE id = $10;
             """.trimIndent()
             executeQuery(
                 sql,
@@ -320,7 +319,6 @@ class NeonCloudClient(private val context: Context) {
                     shop.currencySymbol,
                     shop.pinHash,
                     shop.settingsJson,
-                    System.currentTimeMillis(),
                     shop.id
                 )
             )
@@ -373,7 +371,7 @@ class NeonCloudClient(private val context: Context) {
                 val updateSql = """
                     UPDATE items SET name = $1, name_regional = $2, category = $3, barcode = $4,
                     unit_type = $5, price = $6, stock_qty = $7, low_stock_threshold = $8, is_active = $9,
-                    image_path = $10, updated_at = $11 WHERE id = $12;
+                    image_path = $10, updated_at = NOW() WHERE id = $11;
                 """.trimIndent()
                 executeQuery(
                     updateSql,
@@ -388,14 +386,13 @@ class NeonCloudClient(private val context: Context) {
                         item.lowStockThreshold,
                         item.isActive,
                         item.imagePath,
-                        System.currentTimeMillis(),
                         item.id
                     )
                 )
             } else {
                 val insertSql = """
                     INSERT INTO items (id, shop_id, name, name_regional, category, barcode, unit_type, price, stock_qty, low_stock_threshold, is_active, image_path, created_at, updated_at)
-                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14);
+                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, NOW(), NOW());
                 """.trimIndent()
                 executeQuery(
                     insertSql,
@@ -411,9 +408,7 @@ class NeonCloudClient(private val context: Context) {
                         item.stockQty,
                         item.lowStockThreshold,
                         item.isActive,
-                        item.imagePath,
-                        item.createdAt,
-                        item.updatedAt
+                        item.imagePath
                     )
                 )
             }

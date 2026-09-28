@@ -139,8 +139,18 @@ class AuthRepository(
                 )
                 if (cloudRes.isSuccess) {
                     cloudShop = cloudRes.getOrNull()
+                } else {
+                    val ex = cloudRes.exceptionOrNull()
+                    val msg = ex?.localizedMessage ?: ""
+                    if (msg.contains("already registered", ignoreCase = true)) {
+                        throw Exception(msg)
+                    }
                 }
-            } catch (_: Exception) {}
+            } catch (e: Exception) {
+                if (e.localizedMessage?.contains("already registered", ignoreCase = true) == true) {
+                    throw e
+                }
+            }
         }
 
         // 2. Fallback to remote FastAPI server if available
@@ -231,7 +241,7 @@ class AuthRepository(
         val cleanPin = pin.trim()
         val inputPinHash = hashPin(cleanPin)
 
-        // 1. Direct Cloud Authentication with Neon PostgreSQL (Works across all devices!)
+        // 1. Direct Cloud Authentication with Neon PostgreSQL (Works across all devices in real-time!)
         if (neonCloudClient != null) {
             val cloudRes = neonCloudClient.loginWithPin(cleanPhone, cleanPin)
             if (cloudRes.isSuccess) {
@@ -263,11 +273,57 @@ class AuthRepository(
             } else {
                 val err = cloudRes.exceptionOrNull()
                 val errMsg = err?.localizedMessage ?: ""
-                // If it was a definitive auth rejection (account not found or wrong PIN), fail immediately!
-                if (errMsg.contains("No account found", ignoreCase = true) ||
-                    errMsg.contains("Incorrect", ignoreCase = true) ||
-                    errMsg.contains("PIN", ignoreCase = true)) {
-                    return Result.failure(err ?: Exception("Invalid login credentials"))
+
+                // Case A: Incorrect PIN entered
+                if (errMsg.contains("Incorrect", ignoreCase = true) || (errMsg.contains("PIN", ignoreCase = true) && !errMsg.contains("No account", ignoreCase = true))) {
+                    return Result.failure(Exception("Incorrect 4-digit PIN for mobile number $cleanPhone. Please check and try again."))
+                }
+
+                // Case B: If not found in Neon Cloud, check if previously registered locally in Room DB
+                val localShop = shopDao.getShopByPhone(cleanPhone)
+                if (localShop != null) {
+                    val storedHash = localShop.pinHash ?: hashPin("1234")
+                    val isMatch = (storedHash == inputPinHash) || (storedHash == hashPin("1234") && cleanPin == "1234") || (storedHash.isBlank() && cleanPin == "1234")
+                    if (!isMatch) {
+                        return Result.failure(Exception("Incorrect 4-digit PIN for mobile number $cleanPhone. Please check and try again."))
+                    }
+
+                    // Auto-sync this shop to Neon Cloud now so it is available everywhere!
+                    try {
+                        val regRes = neonCloudClient.registerShop(
+                            shopName = localShop.name,
+                            ownerName = localShop.ownerName,
+                            phone = cleanPhone,
+                            pin = cleanPin,
+                            email = localShop.email,
+                            address = localShop.address,
+                            upiId = localShop.upiId,
+                            currencySymbol = localShop.currencySymbol
+                        )
+                        if (regRes.isSuccess) {
+                            val uploaded = regRes.getOrNull()
+                            if (uploaded != null) {
+                                shopDao.insertShop(uploaded)
+                            }
+                        }
+                    } catch (_: Exception) {}
+
+                    prefs.edit()
+                        .putBoolean(KEY_IS_LOGGED_IN, true)
+                        .putString(KEY_SHOP_ID, localShop.id)
+                        .putString(KEY_LAST_PHONE, cleanPhone)
+                        .putString(KEY_LAST_SHOP_NAME, localShop.name)
+                        .putString(KEY_LAST_OWNER_NAME, localShop.ownerName)
+                        .putString(KEY_USER_EMAIL, localShop.email ?: "")
+                        .putBoolean(KEY_IS_LOCKED, false)
+                        .apply()
+
+                    return Result.success(localShop)
+                }
+
+                // Case C: Truly not registered
+                if (errMsg.contains("No account found", ignoreCase = true)) {
+                    return Result.failure(Exception("No account found with mobile number $cleanPhone. Please switch to Register tab to create your shop."))
                 }
             }
         }
@@ -322,12 +378,13 @@ class AuthRepository(
             } catch (_: Exception) {}
         }
 
-        // 3. Offline fallback to local SQLite database
+        // 3. Offline fallback to local SQLite database (if device is offline)
         val shop = shopDao.getShopByPhone(cleanPhone)
         if (shop != null) {
             val storedHash = shop.pinHash ?: hashPin("1234")
-            if (storedHash != inputPinHash && cleanPin != "1234") {
-                return Result.failure(Exception("Incorrect PIN for this mobile number"))
+            val isPinValid = (storedHash == inputPinHash) || (storedHash.isBlank() && cleanPin == "1234")
+            if (!isPinValid) {
+                return Result.failure(Exception("Incorrect 4-digit PIN for mobile number $cleanPhone. Please check and try again."))
             }
 
             prefs.edit()
@@ -343,8 +400,7 @@ class AuthRepository(
             return Result.success(shop)
         }
 
-        // DO NOT create a dummy account! Fail with clear message
-        return Result.failure(Exception("Account not found with mobile number $cleanPhone. Please connect to internet to sync your cloud account, or register a new shop."))
+        return Result.failure(Exception("No account found with mobile number $cleanPhone. Please switch to Register tab to create your shop."))
     }
 
     suspend fun loginWithGoogle(
@@ -577,12 +633,17 @@ class AuthRepository(
     suspend fun updatePin(shopId: String, newPin: String) {
         val pinHash = hashPin(newPin)
         shopDao.updatePin(shopId, pinHash)
+        val shop = shopDao.getShopById(shopId)
+        if (shop != null) {
+            neonCloudClient?.updateShop(shop.copy(pinHash = pinHash))
+        }
     }
 
     suspend fun updateActiveShopPin(newPin: String): Boolean {
         val shop = shopDao.getActiveShop() ?: return false
         val pinHash = hashPin(newPin)
         shopDao.updatePin(shop.id, pinHash)
+        neonCloudClient?.updateShop(shop.copy(pinHash = pinHash))
         return true
     }
 
