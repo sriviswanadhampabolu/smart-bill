@@ -19,6 +19,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.grocer.billing.core.data.repository.AuthRepository
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.grocer.billing.ui.theme.*
 import kotlinx.coroutines.launch
 
@@ -29,7 +30,7 @@ fun StoreRegistrationScreen(
     onRegistrationCompleted: () -> Unit
 ) {
     val coroutineScope = rememberCoroutineScope()
-    val activeShop by authRepository.observeActiveShop().collectAsState(initial = null)
+    val activeShop by authRepository.observeActiveShop().collectAsStateWithLifecycle(initialValue = null)
 
     var shopkeeperName by remember { mutableStateOf("") }
     var storeName by remember { mutableStateOf("") }

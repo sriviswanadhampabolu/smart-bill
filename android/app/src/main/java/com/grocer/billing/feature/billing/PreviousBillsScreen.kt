@@ -26,6 +26,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.grocer.billing.core.data.local.entities.BillEntity
 import com.grocer.billing.core.data.local.entities.BillItemEntity
 import com.grocer.billing.core.data.repository.BillingRepository
@@ -46,7 +47,7 @@ fun PreviousBillsScreen(
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
 
-    val allBills by billingRepository.observeBills(shopId).collectAsState(initial = emptyList())
+    val allBills by billingRepository.getBillsStream(shopId).collectAsStateWithLifecycle(initialValue = emptyList())
     var searchQuery by remember { mutableStateOf("") }
     var selectedPaymentFilter by remember { mutableStateOf("All") }
 

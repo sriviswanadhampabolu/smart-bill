@@ -10,14 +10,15 @@ connect_args = (
 )
 
 engine_kwargs = {
-    "pool_pre_ping": True,
+    "pool_pre_ping": True,  # Critical for Neon serverless to detect dropped/scaled-to-zero connections
 }
 
 if not db_url.startswith("sqlite"):
     engine_kwargs.update({
-        "pool_recycle": 300,
-        "pool_size": 10,
-        "max_overflow": 20,
+        "pool_recycle": 300,   # Recycle connections every 5 minutes
+        "pool_size": 5,        # Serverless-friendly pool size
+        "max_overflow": 10,    # Allow burst synchronization traffic
+        "pool_timeout": 30,    # Max seconds to wait for connection from pool
     })
 
 engine = create_engine(

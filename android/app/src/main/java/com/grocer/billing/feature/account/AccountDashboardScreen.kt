@@ -1,11 +1,14 @@
 package com.grocer.billing.feature.account
 
 import android.content.Context
+import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -46,6 +49,9 @@ import java.io.FileOutputStream
 import java.io.InputStream
 import java.util.UUID
 
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.grocer.billing.core.data.repository.ClearSessionResult
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AccountDashboardScreen(
@@ -55,12 +61,14 @@ fun AccountDashboardScreen(
 ) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
-    val activeShop by authRepository.observeActiveShop().collectAsState(initial = null)
+    val activeShop by authRepository.observeActiveShop().collectAsStateWithLifecycle(initialValue = null)
 
     var qrCodes by remember { mutableStateOf<List<UpiQrCode>>(emptyList()) }
     var showEditProfileDialog by remember { mutableStateOf(false) }
-    var showAddQrDialog by remember { mutableStateOf(false) }
+    var showAddQrDialog by rememberSaveable { mutableStateOf(false) }
     var showLogoutConfirmDialog by remember { mutableStateOf(false) }
+    var showPendingSyncLogoutDialog by remember { mutableStateOf(false) }
+    var pendingLogoutCount by remember { mutableIntStateOf(0) }
     var qrToDelete by remember { mutableStateOf<UpiQrCode?>(null) }
     var previewQrCode by remember { mutableStateOf<UpiQrCode?>(null) }
     var statusMessage by remember { mutableStateOf<String?>(null) }
@@ -78,17 +86,49 @@ fun AccountDashboardScreen(
         refreshQrCodes()
     }
 
-    // Image Picker for QR Code File Upload
-    var pendingQrImageUri by remember { mutableStateOf<Uri?>(null) }
-    var newQrLabel by remember { mutableStateOf("Payment QR") }
-    var newQrUpiId by remember { mutableStateOf("") }
+    // Image Picker for QR Code File Upload (Persisted across activity recreation)
+    var pendingQrImageUriStr by rememberSaveable { mutableStateOf<String?>(null) }
+    var pendingQrLocalPath by rememberSaveable { mutableStateOf<String?>(null) }
+    val pendingQrImageUri = remember(pendingQrImageUriStr) {
+        pendingQrImageUriStr?.let { Uri.parse(it) }
+    }
+    var qrLabelInput by rememberSaveable { mutableStateOf("Payment QR") }
+    var qrUpiInput by rememberSaveable { mutableStateOf("") }
 
-    val imagePickerLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.GetContent()
+    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+
+    // Modern, system-optimized PickVisualMedia contract taking persistable URI permission
+    val pickVisualMediaLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickVisualMedia()
     ) { uri: Uri? ->
         if (uri != null) {
-            pendingQrImageUri = uri
-            showAddQrDialog = true
+            try {
+                val takeFlags = Intent.FLAG_GRANT_READ_URI_PERMISSION
+                context.contentResolver.takePersistableUriPermission(uri, takeFlags)
+            } catch (_: SecurityException) {
+                // Not all providers support persistable permissions; proceed safely with transient read
+            } catch (_: Exception) {}
+
+            coroutineScope.launch {
+                if (!lifecycleOwner.lifecycle.currentState.isAtLeast(androidx.lifecycle.Lifecycle.State.STARTED)) {
+                    return@launch
+                }
+                try {
+                    val path = processAndScaleQrImage(context, uri)
+                    if (path != null) {
+                        pendingQrLocalPath = path
+                        pendingQrImageUriStr = uri.toString()
+                        showAddQrDialog = true
+                    } else {
+                        statusMessage = "Could not safely process the chosen QR image. Please choose another file."
+                    }
+                } catch (e: Exception) {
+                    statusMessage = "Image processing failed: ${e.localizedMessage}"
+                } catch (oom: OutOfMemoryError) {
+                    System.gc()
+                    statusMessage = "Image is too large for device memory. Please choose a smaller file."
+                }
+            }
         }
     }
 
@@ -330,9 +370,9 @@ fun AccountDashboardScreen(
                                 if (qrCodes.size >= 6) {
                                     statusMessage = "Maximum 6 QR codes reached. Delete one first."
                                 } else {
-                                    newQrLabel = "QR Code #${qrCodes.size + 1}"
-                                    newQrUpiId = shop?.upiId ?: ""
-                                    pendingQrImageUri = null
+                                    qrLabelInput = "QR Code #${qrCodes.size + 1}"
+                                    qrUpiInput = shop?.upiId ?: ""
+                                    pendingQrImageUriStr = null
                                     showAddQrDialog = true
                                 }
                             },
@@ -533,12 +573,13 @@ fun AccountDashboardScreen(
 
     // Dialog: Add / Upload UPI QR Code
     if (showAddQrDialog) {
-        var qrLabelInput by remember { mutableStateOf(newQrLabel) }
-        var qrUpiInput by remember { mutableStateOf(newQrUpiId.ifBlank { activeShop?.upiId ?: "" }) }
         var isSavingQr by remember { mutableStateOf(false) }
 
         AlertDialog(
-            onDismissRequest = { showAddQrDialog = false },
+            onDismissRequest = { 
+                showAddQrDialog = false 
+                pendingQrImageUriStr = null
+            },
             title = { Text("Add UPI QR Code", fontWeight = FontWeight.Bold) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -570,45 +611,81 @@ fun AccountDashboardScreen(
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         OutlinedButton(
-                            onClick = { imagePickerLauncher.launch("image/*") },
+                            onClick = {
+                                try {
+                                    pickVisualMediaLauncher.launch(
+                                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                                    )
+                                } catch (e: Exception) {
+                                    statusMessage = "Unable to launch system image picker: ${e.localizedMessage}"
+                                }
+                            },
                             modifier = Modifier.weight(1f)
                         ) {
                             Icon(Icons.Default.UploadFile, contentDescription = null, modifier = Modifier.size(16.dp))
                             Spacer(modifier = Modifier.width(4.dp))
-                            Text(if (pendingQrImageUri != null) "Change File" else "Pick Image", fontSize = 12.sp)
+                            Text(if (pendingQrImageUri != null) "Change Image" else "Pick Image from Gallery", fontSize = 12.sp)
                         }
                     }
 
-                    if (pendingQrImageUri != null) {
-                        Text(
-                            text = "✓ Image selected from gallery",
-                            fontSize = 12.sp,
-                            color = GreenPrimary,
-                            fontWeight = FontWeight.Bold
-                        )
+                    if (pendingQrLocalPath != null) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.padding(top = 4.dp)
+                        ) {
+                            val previewBitmap = produceState<Bitmap?>(initialValue = null, key1 = pendingQrLocalPath) {
+                                value = withContext(Dispatchers.IO) {
+                                    try {
+                                        BitmapFactory.decodeFile(pendingQrLocalPath)
+                                    } catch (_: Throwable) { null }
+                                }
+                            }
+                            if (previewBitmap.value != null) {
+                                Image(
+                                    bitmap = previewBitmap.value!!.asImageBitmap(),
+                                    contentDescription = null,
+                                    modifier = Modifier
+                                        .size(44.dp)
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .border(1.dp, GreenPrimary.copy(alpha = 0.5f), RoundedCornerShape(8.dp))
+                                )
+                                Spacer(modifier = Modifier.width(10.dp))
+                            }
+                            Column {
+                                Text(
+                                    text = "✓ QR image downscaled & ready",
+                                    fontSize = 12.sp,
+                                    color = GreenPrimary,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Text(
+                                    text = "OOM-safe memory footprint optimized",
+                                    fontSize = 11.sp,
+                                    color = TextSecondary
+                                )
+                            }
+                        }
                     }
                 }
             },
             confirmButton = {
                 Button(
                     onClick = {
-                        if (qrLabelInput.isBlank()) qrLabelInput = "Payment QR"
+                        val finalLabel = qrLabelInput.trim().ifBlank { "Payment QR" }
                         isSavingQr = true
                         coroutineScope.launch {
-                            val savedPath = pendingQrImageUri?.let { uri ->
-                                copyUriToInternalStorage(context, uri)
-                            }
                             val newQr = UpiQrCode(
-                                label = qrLabelInput.trim(),
+                                label = finalLabel,
                                 upiId = qrUpiInput.trim(),
-                                imagePath = savedPath,
+                                imagePath = pendingQrLocalPath,
                                 isDefault = qrCodes.isEmpty()
                             )
                             authRepository.addQrCode(newQr)
                             refreshQrCodes()
                             isSavingQr = false
                             showAddQrDialog = false
-                            pendingQrImageUri = null
+                            pendingQrImageUriStr = null
+                            pendingQrLocalPath = null
                         }
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = GreenPrimary),
@@ -620,7 +697,8 @@ fun AccountDashboardScreen(
             dismissButton = {
                 TextButton(onClick = { 
                     showAddQrDialog = false
-                    pendingQrImageUri = null
+                    pendingQrImageUriStr = null
+                    pendingQrLocalPath = null
                 }) {
                     Text("Cancel")
                 }
@@ -692,16 +770,31 @@ fun AccountDashboardScreen(
     if (showLogoutConfirmDialog) {
         AlertDialog(
             onDismissRequest = { showLogoutConfirmDialog = false },
-            title = { Text("Logout From Store?", fontWeight = FontWeight.Bold) },
+            title = { Text("Logout & Switch Store?", fontWeight = FontWeight.Bold) },
             text = {
-                Text("You will need to login again to open the billing counter. Your local stock and sales data remain safely preserved.")
+                Text("Your account session will be safely cleared. Any unsynced counter sales must be synchronized first to prevent data loss.")
             },
             confirmButton = {
                 Button(
                     onClick = {
-                        showLogoutConfirmDialog = false
-                        authRepository.logout()
-                        onLogout()
+                        coroutineScope.launch {
+                            val result = authRepository.clearLocalSession(force = false)
+                            when (result) {
+                                is ClearSessionResult.Success -> {
+                                    showLogoutConfirmDialog = false
+                                    onLogout()
+                                }
+                                is ClearSessionResult.BlockedPendingData -> {
+                                    showLogoutConfirmDialog = false
+                                    pendingLogoutCount = result.pendingCount
+                                    showPendingSyncLogoutDialog = true
+                                }
+                                is ClearSessionResult.Error -> {
+                                    showLogoutConfirmDialog = false
+                                    statusMessage = "Logout error: ${result.error.localizedMessage}"
+                                }
+                            }
+                        }
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = AlertRed)
                 ) {
@@ -711,6 +804,70 @@ fun AccountDashboardScreen(
             dismissButton = {
                 TextButton(onClick = { showLogoutConfirmDialog = false }) {
                     Text("Cancel")
+                }
+            }
+        )
+    }
+
+    // Dialog: Pending Unsynced Data on Logout
+    if (showPendingSyncLogoutDialog) {
+        AlertDialog(
+            onDismissRequest = { showPendingSyncLogoutDialog = false },
+            title = { Text("Unsynced Data Detected", fontWeight = FontWeight.Bold) },
+            text = {
+                Text("You have $pendingLogoutCount unsynced transaction(s). You can sync now to cloud before logging out, or logout anyway to switch accounts immediately.")
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        coroutineScope.launch {
+                            showPendingSyncLogoutDialog = false
+                            val shopId = authRepository.getActiveShopId() ?: ""
+                            if (shopId.isNotBlank()) {
+                                authRepository.getSyncManager()?.flushPendingQueue(shopId)
+                            }
+                            authRepository.clearLocalSession(force = true)
+                            onLogout()
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = GreenPrimary)
+                ) {
+                    Text("Sync & Logout")
+                }
+            },
+            dismissButton = {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    TextButton(
+                        onClick = {
+                            coroutineScope.launch {
+                                showPendingSyncLogoutDialog = false
+                                authRepository.logout()
+                                onLogout()
+                            }
+                        }
+                    ) {
+                        Text("Logout Anyway", color = AlertRed, fontWeight = FontWeight.Bold)
+                    }
+                    TextButton(onClick = { showPendingSyncLogoutDialog = false }) {
+                        Text("Cancel")
+                    }
+                }
+            }
+        )
+    }
+
+    // Dialog: Status / Notice
+    if (statusMessage != null) {
+        AlertDialog(
+            onDismissRequest = { statusMessage = null },
+            title = { Text("Notice", fontWeight = FontWeight.Bold) },
+            text = { Text(statusMessage ?: "") },
+            confirmButton = {
+                Button(
+                    onClick = { statusMessage = null },
+                    colors = ButtonDefaults.buttonColors(containerColor = GreenPrimary)
+                ) {
+                    Text("OK")
                 }
             }
         )
@@ -872,19 +1029,71 @@ private fun generateQrBitmap(content: String, size: Int = 300): Bitmap? {
     }
 }
 
-private suspend fun copyUriToInternalStorage(context: Context, uri: Uri): String? = withContext(Dispatchers.IO) {
+private suspend fun processAndScaleQrImage(context: Context, uri: Uri): String? = withContext(Dispatchers.IO) {
     try {
-        val inputStream: InputStream? = context.contentResolver.openInputStream(uri)
+        // Step 1: Decode image bounds only without allocating pixel memory
+        val boundsOptions = BitmapFactory.Options().apply {
+            inJustDecodeBounds = true
+        }
+        context.contentResolver.openInputStream(uri)?.use { stream ->
+            BitmapFactory.decodeStream(stream, null, boundsOptions)
+        }
+
+        val origWidth = boundsOptions.outWidth
+        val origHeight = boundsOptions.outHeight
+        if (origWidth <= 0 || origHeight <= 0) return@withContext null
+
+        // Step 2: Compute inSampleSize to downsample high-res camera/gallery images
+        val targetMaxDimension = 512
+        var inSampleSize = 1
+        while ((origWidth / inSampleSize) > targetMaxDimension * 2 || (origHeight / inSampleSize) > targetMaxDimension * 2) {
+            inSampleSize *= 2
+        }
+
+        // Step 3: Decode with computed inSampleSize and lightweight RGB_565 config
+        val decodeOptions = BitmapFactory.Options().apply {
+            this.inSampleSize = inSampleSize
+            inPreferredConfig = Bitmap.Config.RGB_565
+        }
+        val sampledBitmap = context.contentResolver.openInputStream(uri)?.use { stream ->
+            BitmapFactory.decodeStream(stream, null, decodeOptions)
+        } ?: return@withContext null
+
+        // Step 4: Scale safely to exact target bounds using Bitmap.createScaledBitmap
+        val aspect = origWidth.toFloat() / origHeight.toFloat()
+        val targetWidth: Int
+        val targetHeight: Int
+        if (origWidth > origHeight) {
+            targetWidth = minOf(targetMaxDimension, sampledBitmap.width)
+            targetHeight = (targetWidth / aspect).toInt().coerceAtLeast(1)
+        } else {
+            targetHeight = minOf(targetMaxDimension, sampledBitmap.height)
+            targetWidth = (targetHeight * aspect).toInt().coerceAtLeast(1)
+        }
+
+        val scaledBitmap = if (sampledBitmap.width != targetWidth || sampledBitmap.height != targetHeight) {
+            val scaled = Bitmap.createScaledBitmap(sampledBitmap, targetWidth, targetHeight, true)
+            if (scaled != sampledBitmap) {
+                sampledBitmap.recycle()
+            }
+            scaled
+        } else {
+            sampledBitmap
+        }
+
+        // Step 5: Save safely into app internal storage directory
         val dir = File(context.filesDir, "qr_codes")
         if (!dir.exists()) dir.mkdirs()
         val targetFile = File(dir, "qr_${UUID.randomUUID()}.png")
-        val outputStream = FileOutputStream(targetFile)
-        inputStream?.use { input ->
-            outputStream.use { output ->
-                input.copyTo(output)
-            }
+        FileOutputStream(targetFile).use { output ->
+            scaledBitmap.compress(Bitmap.CompressFormat.PNG, 90, output)
         }
+        scaledBitmap.recycle()
+
         targetFile.absolutePath
+    } catch (_: OutOfMemoryError) {
+        System.gc()
+        null
     } catch (_: Exception) {
         null
     }

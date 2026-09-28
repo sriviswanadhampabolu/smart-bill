@@ -31,14 +31,18 @@ import com.grocer.billing.core.data.repository.AuthRepository
 import com.grocer.billing.ui.theme.*
 import kotlinx.coroutines.launch
 
+import androidx.compose.ui.platform.LocalContext
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AuthScreen(
     authRepository: AuthRepository,
     localBackupManager: LocalBackupManager? = null,
     retrofitClient: RetrofitClient? = null,
-    onAuthSuccess: (isNewUser: Boolean) -> Unit
+    onAuthSuccess: (isNewUser: Boolean) -> Unit,
+    onNavigateToDashboard: (() -> Unit)? = null
 ) {
+    val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
     val lastPhone = remember { authRepository.getLastPhoneNumber() }
     val lastShop = remember { authRepository.getLastShopName() }
@@ -62,10 +66,54 @@ fun AuthScreen(
     var availableBackup by remember { mutableStateOf<BackupMetadata?>(null) }
     var isRestoring by remember { mutableStateOf(false) }
 
-    // Google Sign-In Dialog State
-    var showGoogleDialog by remember { mutableStateOf(false) }
-    var googleEmailInput by remember { mutableStateOf(if (userEmail.isNotBlank()) userEmail else "shopkeeper@gmail.com") }
-    var googleNameInput by remember { mutableStateOf(if (lastOwner.isNotBlank()) lastOwner else "Kirana Merchant") }
+    // Google Credential Manager State & Logic
+    val googleAuthManager = remember { GoogleAuthManager() }
+    var isGoogleLoading by remember { mutableStateOf(false) }
+
+    fun handleGoogleSignIn() {
+        if (isGoogleLoading || isLoading) return
+        isGoogleLoading = true
+        errorMessage = null
+
+        coroutineScope.launch {
+            try {
+                val signInResult = googleAuthManager.signIn(context)
+                if (signInResult.isSuccess) {
+                    val googleUser = signInResult.getOrThrow()
+                    val authResult = authRepository.loginWithGoogle(
+                        email = googleUser.email,
+                        displayName = googleUser.displayName,
+                        idToken = googleUser.idToken,
+                        photoUrl = googleUser.photoUrl,
+                        phone = googleUser.phoneNumber ?: phoneInput.takeIf { it.trim().length == 10 }
+                    )
+                    if (authResult.isSuccess) {
+                        // On Success: Route authenticated user to Main Dashboard screen
+                        if (onNavigateToDashboard != null) {
+                            onNavigateToDashboard()
+                        } else {
+                            onAuthSuccess(false)
+                        }
+                    } else {
+                        errorMessage = authResult.exceptionOrNull()?.localizedMessage
+                            ?: "Failed to authenticate account with cloud service."
+                    }
+                } else {
+                    val ex = signInResult.exceptionOrNull()
+                    if (ex is GoogleAuthCancellationException) {
+                        errorMessage = "Google sign-in was cancelled."
+                    } else {
+                        errorMessage = ex?.localizedMessage ?: "Google sign-in failed. Please try again."
+                    }
+                }
+            } catch (e: Exception) {
+                errorMessage = "Google sign-in error: ${e.localizedMessage ?: "Unknown error"}"
+            } finally {
+                isGoogleLoading = false
+            }
+        }
+    }
+
 
     // Backend Cloud Connection Dialog State
     var showServerDialog by remember { mutableStateOf(false) }
@@ -252,44 +300,13 @@ fun AuthScreen(
 
                     Spacer(modifier = Modifier.height(18.dp))
 
-                    // GOOGLE AUTHORIZATION BUTTON
-                    OutlinedButton(
-                        onClick = { showGoogleDialog = true },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(52.dp),
-                        shape = RoundedCornerShape(14.dp),
-                        border = BorderStroke(1.2.dp, Color(0xFFDADCE0)),
-                        colors = ButtonDefaults.outlinedButtonColors(containerColor = Color.White)
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.Center
-                        ) {
-                            // Google 'G' stylized badge
-                            Surface(
-                                shape = CircleShape,
-                                color = Color(0xFF4285F4),
-                                modifier = Modifier.size(24.dp)
-                            ) {
-                                Box(contentAlignment = Alignment.Center) {
-                                    Text(
-                                        text = "G",
-                                        color = Color.White,
-                                        fontWeight = FontWeight.Black,
-                                        fontSize = 15.sp
-                                    )
-                                }
-                            }
-                            Spacer(modifier = Modifier.width(12.dp))
-                            Text(
-                                text = if (selectedTab == 0) "Sign in with Google" else "Register with Google",
-                                fontWeight = FontWeight.Bold,
-                                fontSize = 15.sp,
-                                color = Color(0xFF3C4043)
-                            )
-                        }
-                    }
+                    // MODERN GOOGLE CREDENTIAL MANAGER SIGN-IN BUTTON
+                    GoogleSignInButton(
+                        onClick = { handleGoogleSignIn() },
+                        isLoading = isGoogleLoading,
+                        isSignUp = selectedTab == 1,
+                        enabled = !isLoading && !isGoogleLoading
+                    )
 
                     Spacer(modifier = Modifier.height(16.dp))
 
@@ -504,100 +521,6 @@ fun AuthScreen(
         }
     }
 
-    // Google Sign-In Confirmation Dialog
-    if (showGoogleDialog) {
-        var isGoogleLoading by remember { mutableStateOf(false) }
-        var googleError by remember { mutableStateOf<String?>(null) }
-
-        AlertDialog(
-            onDismissRequest = { if (!isGoogleLoading) showGoogleDialog = false },
-            title = {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Surface(
-                        shape = CircleShape,
-                        color = Color(0xFF4285F4),
-                        modifier = Modifier.size(24.dp)
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Text("G", color = Color.White, fontWeight = FontWeight.Black, fontSize = 14.sp)
-                        }
-                    }
-                    Spacer(modifier = Modifier.width(10.dp))
-                    Text("Google Authorization", fontWeight = FontWeight.Bold)
-                }
-            },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Text(
-                        text = "Sign in or register with your Google Account to automatically sync store catalog & sales with Neon PostgreSQL.",
-                        fontSize = 13.sp,
-                        color = TextSecondary
-                    )
-                    OutlinedTextField(
-                        value = googleNameInput,
-                        onValueChange = { googleNameInput = it },
-                        label = { Text("Shopkeeper Display Name") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    OutlinedTextField(
-                        value = googleEmailInput,
-                        onValueChange = { googleEmailInput = it },
-                        label = { Text("Google Account Email") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    if (googleError != null) {
-                        Text(googleError ?: "", color = MaterialTheme.colorScheme.error, fontSize = 12.sp)
-                    }
-                }
-            },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        if (googleEmailInput.isBlank()) {
-                            googleError = "Please enter your Google email address."
-                            return@Button
-                        }
-                        isGoogleLoading = true
-                        googleError = null
-                        coroutineScope.launch {
-                            val result = authRepository.loginWithGoogle(
-                                email = googleEmailInput.trim(),
-                                displayName = googleNameInput.trim().ifBlank { "Merchant" },
-                                phone = phoneInput.takeIf { it.length == 10 }
-                            )
-                            isGoogleLoading = false
-                            if (result.isSuccess) {
-                                showGoogleDialog = false
-                                val shop = result.getOrNull()
-                                val isComplete = authRepository.hasCompletedStoreProfile(shop)
-                                onAuthSuccess(!isComplete)
-                            } else {
-                                googleError = result.exceptionOrNull()?.localizedMessage ?: "Google sign in failed"
-                            }
-                        }
-                    },
-                    colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF4285F4)),
-                    enabled = !isGoogleLoading
-                ) {
-                    if (isGoogleLoading) {
-                        CircularProgressIndicator(color = Color.White, modifier = Modifier.size(18.dp))
-                    } else {
-                        Text("Continue with Google")
-                    }
-                }
-            },
-            dismissButton = {
-                TextButton(
-                    onClick = { showGoogleDialog = false },
-                    enabled = !isGoogleLoading
-                ) {
-                    Text("Cancel")
-                }
-            }
-        )
-    }
 
     // Backend URL Settings Dialog
     if (showServerDialog) {
@@ -629,13 +552,22 @@ fun AuthScreen(
                             serverTestMessage = null
                             coroutineScope.launch {
                                 try {
-                                    retrofitClient?.setServerUrl(serverUrlInput)
-                                    val response = retrofitClient?.getApiService()?.checkHealth()
-                                    if (response?.isSuccessful == true) {
-                                        val body = response.body()
-                                        serverTestMessage = "✓ Online Neon Database Connected!\nStatus: ${body?.status} | DB: ${body?.database} (${body?.provider ?: "Neon"})"
+                                    // 1. Direct Cloud Health Check with Neon PostgreSQL
+                                    val neonClient = authRepository.getNeonCloudClient()
+                                    val neonHealth = neonClient?.checkHealth()
+                                    if (neonHealth != null && neonHealth.isConnected) {
+                                        serverTestMessage = "✓ Online Neon Cloud Database Connected!\nDatabase: ${neonHealth.database} (${neonHealth.provider})\nVersion: ${neonHealth.version}\nOnline Records: shops (${neonHealth.shopCount}), items (${neonHealth.itemCount}), bills (${neonHealth.billCount})"
                                     } else {
-                                        serverTestMessage = "✗ Server returned HTTP ${response?.code()}"
+                                        // 2. Fallback to testing configured server URL
+                                        retrofitClient?.setServerUrl(serverUrlInput)
+                                        val response = retrofitClient?.getApiService()?.checkHealth()
+                                        if (response?.isSuccessful == true) {
+                                            val body = response.body()
+                                            serverTestMessage = "✓ Online Database Server Connected!\nStatus: ${body?.status} | DB: ${body?.database} (${body?.provider ?: "Neon"})"
+                                        } else {
+                                            val errReason = neonHealth?.error ?: "Server returned HTTP ${response?.code() ?: "no response"}"
+                                            serverTestMessage = "✗ Connection failed: $errReason"
+                                        }
                                     }
                                 } catch (e: Exception) {
                                     serverTestMessage = "✗ Connection failed: ${e.localizedMessage}"

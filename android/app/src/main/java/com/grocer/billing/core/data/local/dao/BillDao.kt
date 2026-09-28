@@ -15,6 +15,18 @@ interface BillDao {
     @Query("SELECT * FROM bills WHERE shop_id = :shopId ORDER BY created_at DESC")
     fun observeBills(shopId: String): Flow<List<BillEntity>>
 
+    @Query("SELECT * FROM bills WHERE shop_id = :shopId ORDER BY created_at DESC")
+    fun getBillsStream(shopId: String): Flow<List<BillEntity>>
+
+    @Query("SELECT * FROM bill_items WHERE bill_id = :billId")
+    fun getBillItemsStream(billId: String): Flow<List<BillItemEntity>>
+
+    @Query("SELECT COUNT(*) FROM bills WHERE synced_at IS NULL")
+    suspend fun getUnsyncedBillsCount(): Int
+
+    @Query("SELECT COUNT(*) FROM bills WHERE payment_method = 'credit' AND synced_at IS NULL")
+    suspend fun getUnsyncedKhataBillsCount(): Int
+
     @Query("SELECT * FROM bills WHERE id = :billId LIMIT 1")
     suspend fun getBillById(billId: String): BillEntity?
 

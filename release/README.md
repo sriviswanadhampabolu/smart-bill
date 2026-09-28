@@ -4,15 +4,32 @@ This folder contains pre-built Android application packages (`.apk`) for **Smart
 
 ---
 
-## 📱 Latest Release: v1.3.0
+## 📱 Latest Release: v1.4.0
 
 | File | Size | Architecture | Target SDK | SHA-256 Checksum |
 | :--- | :--- | :--- | :--- | :--- |
-| **[`SmartBill-v1.3.0.apk`](./SmartBill-v1.3.0.apk)** | ~37.4 MB | universal (arm64-v8a, armeabi-v7a, x86_64) | Android 15 (API 35) / Min Android 7.0 (API 24) | `90A8F99C3CE8A6E17151DEFF0242A25C527D9DCADEEE3FA662B37D0CB74062A2` |
+| **[`SmartBill-v1.4.0.apk`](./SmartBill-v1.4.0.apk)** | ~38.3 MB | universal (arm64-v8a, armeabi-v7a, x86_64) | Android 15 (API 35) / Min Android 7.0 (API 24) | `91220C566D5E9CC01EBF5AF9E7C54D6C205DF03998AA67C75F4384FF9C17DCCB` |
 
 ---
 
-## 🌟 What's New in v1.3.0
+## 🌟 What's New in v1.4.0
+
+- 🔑 **Modern Android Credential Manager Integration**:
+  - One-tap **"Sign in with Google"** / **"Register with Google"** using Android's modern `androidx.credentials` and `com.google.android.libraries.identity.googleid` APIs.
+  - Native bottom-sheet authentication with official Google OAuth Client ID (`190960573906-n4jm63dv5fvpf1v5q65gogumchjdb5r9.apps.googleusercontent.com`).
+  - Seamless fallback and cancellation handling without crashing or blocking users.
+- ⚡ **Direct Routing to Main Dashboard**:
+  - Automatically routes authenticated merchants directly to the **Main Dashboard** counter view upon successful Google Sign-In.
+- 🎨 **Branded Google Identity Button**:
+  - Modern Outlined Material 3 component with official 4-color Google vector logo, interactive loading feedback, and disabled states during active token exchange.
+- 🛡️ **Enriched Cloud Session & ID Token Processing**:
+  - Secure verification and extraction of claims (`email`, `display_name`, `photo_url`, `id_token`) on both local Room database and FastAPI/Neon cloud backend.
+
+---
+
+## 📱 Previous Releases
+
+- **[`SmartBill-v1.3.0.apk`](./SmartBill-v1.3.0.apk)** (~37.4 MB)
 
 - 🔐 **One-Time User Login & Register (Persistent Session)**:
   - User details & security tokens saved locally on the device; users do not need to login repeatedly.

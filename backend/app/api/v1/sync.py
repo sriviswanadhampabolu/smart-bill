@@ -15,10 +15,26 @@ from app.api.deps import get_current_shop
 router = APIRouter(prefix="/sync", tags=["Sync & Reports"])
 
 
+from sqlalchemy import text
+
+
 @router.get("/status")
-def get_sync_status(current_shop: Shop = Depends(get_current_shop)):
+def get_sync_status(
+    current_shop: Shop = Depends(get_current_shop),
+    db: Session = Depends(get_db)
+):
+    """
+    Performs a lightweight connection handshake check (SELECT 1) against PostgreSQL.
+    """
+    db_status = "connected"
+    try:
+        db.execute(text("SELECT 1"))
+    except Exception as e:
+        db_status = f"unhealthy: {str(e)}"
+
     return {
-        "status": "ready",
+        "status": "ready" if db_status == "connected" else "degraded",
+        "database": db_status,
         "shop_id": current_shop.id,
         "server_time": datetime.now(timezone.utc).isoformat(),
         "protocol_version": "1.0"

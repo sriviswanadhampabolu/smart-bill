@@ -134,3 +134,21 @@ def test_sync_status(client):
     assert resp.status_code == 200
     assert resp.json()["status"] == "ready"
     assert resp.json()["protocol_version"] == "1.0"
+
+
+def test_google_auth_endpoint(client):
+    google_payload = {
+        "email": "kirana_partner@gmail.com",
+        "display_name": "Suresh Patel",
+        "id_token": "dummy_jwt_id_token",
+        "photo_url": "https://lh3.googleusercontent.com/a/dummy",
+        "phone": "9811223344"
+    }
+    resp = client.post("/api/v1/auth/google", json=google_payload)
+    assert resp.status_code == 200
+    data = resp.json()
+    assert "access_token" in data
+    assert data["token_type"] == "bearer"
+    assert data["owner_name"] == "Suresh Patel"
+    assert data["shop_name"] == "Suresh Patel's Store"
+

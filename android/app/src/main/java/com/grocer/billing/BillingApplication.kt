@@ -37,6 +37,8 @@ class BillingApplication : Application() {
         private set
     lateinit var localBackupManager: com.grocer.billing.core.data.backup.LocalBackupManager
         private set
+    lateinit var neonCloudClient: com.grocer.billing.core.data.remote.NeonCloudClient
+        private set
 
     override fun onCreate() {
         super.onCreate()
@@ -44,6 +46,7 @@ class BillingApplication : Application() {
         com.grocer.billing.core.lang.AppLanguageManager.init(this)
         database = AppDatabase.getInstance(this)
         retrofitClient = RetrofitClient(this)
+        neonCloudClient = com.grocer.billing.core.data.remote.NeonCloudClient(this)
 
         imageEmbedder = com.grocer.billing.core.vision.MobileNetV3Embedder(this)
         vectorCache = com.grocer.billing.core.vision.VectorCache()
@@ -85,7 +88,10 @@ class BillingApplication : Application() {
             shopDao = database.shopDao(),
             context = this,
             retrofitClient = retrofitClient,
-            syncManager = syncManager
+            syncManager = syncManager,
+            neonCloudClient = neonCloudClient,
+            itemDao = database.itemDao(),
+            database = database
         )
 
         itemRepository = ItemRepository(
@@ -96,7 +102,8 @@ class BillingApplication : Application() {
             syncQueueDao = database.syncQueueDao(),
             syncManager = syncManager,
             vectorCache = vectorCache,
-            context = this
+            context = this,
+            neonCloudClient = neonCloudClient
         )
 
         billingRepository = BillingRepository(
@@ -116,9 +123,8 @@ class BillingApplication : Application() {
         )
         reportsRepository = com.grocer.billing.core.data.repository.ReportsRepository(database)
 
-        // Ensure store counter starts locked on app opening if user logged in
+        // Trigger auto sync on app launch if user is logged in
         if (authRepository.isUserLoggedIn()) {
-            authRepository.lockApp()
             val activeShopId = authRepository.getActiveShopId() ?: ""
             if (activeShopId.isNotBlank()) {
                 syncManager.triggerAutoSync(activeShopId)

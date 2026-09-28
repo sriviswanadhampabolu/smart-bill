@@ -10,6 +10,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.DeleteOutline
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.EditNotifications
 import androidx.compose.material.icons.filled.NotificationsActive
 import androidx.compose.material.icons.filled.PhotoCamera
@@ -25,6 +26,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.grocer.billing.core.data.local.entities.ItemEntity
 import com.grocer.billing.core.data.repository.ItemRepository
 import com.grocer.billing.core.data.repository.OnboardingRepository
@@ -51,6 +53,7 @@ fun InventoryScreen(
     var itemToTrainPhotos by remember { mutableStateOf<ItemEntity?>(null) }
     var itemToDelete by remember { mutableStateOf<ItemEntity?>(null) }
     var itemToEditAlert by remember { mutableStateOf<ItemEntity?>(null) }
+    var itemToEditDetails by remember { mutableStateOf<ItemEntity?>(null) }
 
     var effectiveShopId by remember(shopId) { mutableStateOf(shopId) }
     LaunchedEffect(shopId) {
@@ -68,7 +71,7 @@ fun InventoryScreen(
 
     // Observe all items sorted by lowest stock first
     val allItems by itemRepository.observeItems(effectiveShopId, lowestStockFirst = true)
-        .collectAsState(initial = emptyList())
+        .collectAsStateWithLifecycle(initialValue = emptyList())
 
     val lowStockCount = remember(allItems) {
         allItems.count { it.stockQty <= it.lowStockThreshold }
@@ -287,12 +290,25 @@ fun InventoryScreen(
                                 onRestock = { restockItem = item },
                                 onTrainPhotos = { itemToTrainPhotos = item },
                                 onDelete = { itemToDelete = item },
-                                onEditAlertLimit = { itemToEditAlert = item }
+                                onEditAlertLimit = { itemToEditAlert = item },
+                                onEdit = { itemToEditDetails = item }
                             )
                         }
                     }
                 }
             }
+        }
+
+        // Edit Item Details Dialog
+        if (itemToEditDetails != null) {
+            EditItemDialog(
+                item = itemToEditDetails!!,
+                itemRepository = itemRepository,
+                onDismiss = { itemToEditDetails = null },
+                onItemUpdated = {
+                    itemToEditDetails = null
+                }
+            )
         }
 
         // Add Item Dialog
@@ -414,7 +430,8 @@ fun ItemRowCard(
     onRestock: () -> Unit,
     onTrainPhotos: () -> Unit = {},
     onDelete: () -> Unit,
-    onEditAlertLimit: () -> Unit
+    onEditAlertLimit: () -> Unit,
+    onEdit: () -> Unit = {}
 ) {
     val isOutOfStock = item.stockQty <= 0
     val isLowStock = !isOutOfStock && item.stockQty <= item.lowStockThreshold
@@ -554,17 +571,30 @@ fun ItemRowCard(
                     }
                 }
 
-                // Delete Button on Top-Right
-                IconButton(
-                    onClick = onDelete,
-                    modifier = Modifier.size(34.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.DeleteOutline,
-                        contentDescription = "Delete Item",
-                        tint = AlertRed.copy(alpha = 0.85f),
-                        modifier = Modifier.size(20.dp)
-                    )
+                // Action Buttons on Top-Right
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(
+                        onClick = onEdit,
+                        modifier = Modifier.size(34.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Edit,
+                            contentDescription = "Edit Item Details",
+                            tint = GreenPrimary,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                    IconButton(
+                        onClick = onDelete,
+                        modifier = Modifier.size(34.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.DeleteOutline,
+                            contentDescription = "Delete Item",
+                            tint = AlertRed.copy(alpha = 0.85f),
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
                 }
             }
 
@@ -576,6 +606,24 @@ fun ItemRowCard(
                 horizontalArrangement = Arrangement.End,
                 verticalAlignment = Alignment.CenterVertically
             ) {
+                OutlinedButton(
+                    onClick = onEdit,
+                    shape = RoundedCornerShape(10.dp),
+                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                    modifier = Modifier.height(34.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Edit,
+                        contentDescription = null,
+                        tint = GreenPrimary,
+                        modifier = Modifier.size(14.dp)
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("Edit", fontSize = 11.sp, color = TextPrimary, fontWeight = FontWeight.SemiBold)
+                }
+
+                Spacer(modifier = Modifier.width(8.dp))
+
                 OutlinedButton(
                     onClick = onEditAlertLimit,
                     shape = RoundedCornerShape(10.dp),

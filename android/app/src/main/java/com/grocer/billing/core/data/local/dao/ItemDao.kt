@@ -13,6 +13,9 @@ interface ItemDao {
     @Query("SELECT * FROM items WHERE shop_id = :shopId AND is_active = 1 ORDER BY name ASC")
     fun observeActiveItems(shopId: String): Flow<List<ItemEntity>>
 
+    @Query("SELECT * FROM items WHERE shop_id = :shopId AND is_active = 1 ORDER BY name ASC")
+    fun getItemsStream(shopId: String): Flow<List<ItemEntity>>
+
     @Query("SELECT * FROM items WHERE is_active = 1 ORDER BY name ASC")
     fun observeAllActiveItemsByName(): Flow<List<ItemEntity>>
 
@@ -21,6 +24,12 @@ interface ItemDao {
 
     @Query("SELECT * FROM items WHERE is_active = 1 ORDER BY stock_qty ASC")
     fun observeAllItemsLowStockFirst(): Flow<List<ItemEntity>>
+
+    @Query("SELECT * FROM items WHERE shop_id = :shopId")
+    fun getAllItemsStream(shopId: String): Flow<List<ItemEntity>>
+
+    @Query("SELECT * FROM items WHERE shop_id = :shopId AND (name LIKE '%' || :query || '%' OR name_regional LIKE '%' || :query || '%') AND is_active = 1")
+    fun searchItemsStream(shopId: String, query: String): Flow<List<ItemEntity>>
 
     @Query("SELECT * FROM items WHERE shop_id = :shopId AND stock_qty <= low_stock_threshold AND is_active = 1")
     fun observeLowStockAlerts(shopId: String): Flow<List<ItemEntity>>

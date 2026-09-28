@@ -47,25 +47,30 @@ def health_check():
     from sqlalchemy import text
     try:
         db = SessionLocal()
+        # Primary lightweight connection handshake
         db.execute(text("SELECT 1"))
-        shop_count = db.execute(text("SELECT count(*) FROM shops")).scalar()
-        item_count = db.execute(text("SELECT count(*) FROM items")).scalar()
-        bill_count = db.execute(text("SELECT count(*) FROM bills")).scalar()
-        db.close()
+        
+        # Optional metrics check
+        try:
+            shop_count = db.execute(text("SELECT count(*) FROM shops")).scalar()
+            item_count = db.execute(text("SELECT count(*) FROM items")).scalar()
+            bill_count = db.execute(text("SELECT count(*) FROM bills")).scalar()
+            counts = {"shops": shop_count, "items": item_count, "bills": bill_count}
+        except Exception:
+            counts = {"shops": 0, "items": 0, "bills": 0}
+        finally:
+            db.close()
+
         return {
             "status": "healthy",
             "database": "connected",
             "provider": "Neon Cloud PostgreSQL",
             "neon_data_api_url": settings.NEON_DATA_API_URL,
-            "counts": {
-                "shops": shop_count,
-                "items": item_count,
-                "bills": bill_count,
-            }
+            "counts": counts
         }
     except Exception as e:
         return {
-            "status": "degraded",
-            "database": "error",
+            "status": "offline_mode",
+            "database": "disconnected",
             "error": str(e)
         }

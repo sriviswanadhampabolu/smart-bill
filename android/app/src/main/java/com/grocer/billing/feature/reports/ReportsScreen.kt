@@ -25,6 +25,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.grocer.billing.core.data.repository.BillingRepository
 import com.grocer.billing.core.data.repository.ExecutiveReport
 import com.grocer.billing.core.data.repository.ItemRepository
@@ -53,10 +54,10 @@ fun ReportsScreen(
     var pendingSyncCount by remember { mutableStateOf(0) }
     var isSyncing by remember { mutableStateOf(false) }
 
-    val todaySales by billingRepository.observeTodaySales(shopId).collectAsState(initial = 0.0)
-    val todayBillsCount by billingRepository.observeTodayBillsCount(shopId).collectAsState(initial = 0)
-    val monthSales by billingRepository.observeMonthSales(shopId).collectAsState(initial = 0.0)
-    val monthBillsCount by billingRepository.observeMonthBillsCount(shopId).collectAsState(initial = 0)
+    val todaySales by billingRepository.observeTodaySales(shopId).collectAsStateWithLifecycle(initialValue = 0.0)
+    val todayBillsCount by billingRepository.observeTodayBillsCount(shopId).collectAsStateWithLifecycle(initialValue = 0)
+    val monthSales by billingRepository.observeMonthSales(shopId).collectAsStateWithLifecycle(initialValue = 0.0)
+    val monthBillsCount by billingRepository.observeMonthBillsCount(shopId).collectAsStateWithLifecycle(initialValue = 0)
 
     val currentMonthName = remember {
         SimpleDateFormat("MMMM yyyy", Locale.getDefault()).format(Date())

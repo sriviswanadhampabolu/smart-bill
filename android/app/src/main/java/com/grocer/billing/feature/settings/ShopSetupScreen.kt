@@ -15,6 +15,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.grocer.billing.core.data.repository.ShopRepository
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.grocer.billing.ui.theme.GreenPrimary
 import kotlinx.coroutines.launch
 
@@ -26,7 +27,7 @@ fun ShopSetupScreen(
     onFinished: () -> Unit
 ) {
     val coroutineScope = rememberCoroutineScope()
-    val shop by shopRepository.observeShop().collectAsState(initial = null)
+    val shop by shopRepository.observeShop().collectAsStateWithLifecycle(initialValue = null)
 
     var shopName by remember(shop) { mutableStateOf(shop?.name ?: "") }
     var ownerName by remember(shop) { mutableStateOf(shop?.ownerName ?: "") }

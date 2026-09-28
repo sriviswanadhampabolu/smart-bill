@@ -22,6 +22,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.BorderStroke
 import androidx.fragment.app.FragmentActivity
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.grocer.billing.core.data.repository.AuthRepository
 import com.grocer.billing.core.security.BiometricAuthManager
 import com.grocer.billing.ui.theme.*
@@ -38,7 +39,7 @@ fun PinUnlockScreen(
     var enteredPin by remember { mutableStateOf("") }
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var showChangePinDialog by remember { mutableStateOf(false) }
-    val activeShop by authRepository.observeActiveShop().collectAsState(initial = null)
+    val activeShop by authRepository.observeActiveShop().collectAsStateWithLifecycle(initialValue = null)
 
     val isBiometricAvailable = remember { BiometricAuthManager.isBiometricAvailable(context) }
     val isBiometricEnabled = remember { authRepository.isBiometricEnabled() }

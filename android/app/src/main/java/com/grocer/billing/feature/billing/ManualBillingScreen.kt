@@ -14,6 +14,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.QrCode2
 import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Share
@@ -27,7 +28,10 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.grocer.billing.core.data.local.entities.ItemEntity
+import com.grocer.billing.core.data.model.UpiQrCode
+import com.grocer.billing.core.data.repository.AuthRepository
 import com.grocer.billing.core.data.repository.BillingRepository
 import com.grocer.billing.core.data.repository.CartLine
 import com.grocer.billing.core.data.repository.CompletedSale
@@ -44,6 +48,7 @@ fun ManualBillingScreen(
     currencySymbol: String = "₹",
     itemRepository: ItemRepository,
     billingRepository: BillingRepository,
+    authRepository: AuthRepository? = null,
     onNavigateBack: () -> Unit
 ) {
     val context = LocalContext.current
@@ -56,14 +61,46 @@ fun ManualBillingScreen(
     val cartLines = remember { mutableStateListOf<CartLine>() }
     var paymentMethod by remember { mutableStateOf("cash") } // 'cash', 'upi', 'credit'
 
+    var qrCodes by remember { mutableStateOf<List<UpiQrCode>>(emptyList()) }
+    var defaultUpiId by remember { mutableStateOf<String?>(null) }
+    var showPaymentQrDialog by remember { mutableStateOf(false) }
+
+    LaunchedEffect(authRepository) {
+        if (authRepository != null) {
+            qrCodes = authRepository.getQrCodes()
+            defaultUpiId = authRepository.getActiveShop()?.upiId
+        }
+    }
+
     var weightItemToSelect by remember { mutableStateOf<ItemEntity?>(null) }
     var itemToDeleteFromCart by remember { mutableStateOf<CartLine?>(null) }
     var showClearBillConfirm by remember { mutableStateOf(false) }
     var completedSale by remember { mutableStateOf<CompletedSale?>(null) }
     var isSavingBill by remember { mutableStateOf(false) }
 
+    fun executeSaveBill() {
+        if (cartLines.isEmpty() || isSavingBill) return
+        isSavingBill = true
+        coroutineScope.launch {
+            try {
+                val sale = billingRepository.completeSale(
+                    shopId = shopId,
+                    shopName = shopName,
+                    cartLines = cartLines.toList(),
+                    paymentMethod = paymentMethod,
+                    currencySymbol = currencySymbol
+                )
+                completedSale = sale
+            } catch (_: Exception) {
+                // error handling
+            } finally {
+                isSavingBill = false
+            }
+        }
+    }
+
     // Items list
-    val allItems by itemRepository.observeItems(shopId).collectAsState(initial = emptyList())
+    val allItems by itemRepository.observeItems(shopId).collectAsStateWithLifecycle(initialValue = emptyList())
 
     val filteredItems = remember(allItems, searchQuery, selectedCategory) {
         allItems.filter { item ->
@@ -344,10 +381,28 @@ fun ManualBillingScreen(
                         listOf("cash" to "Cash", "upi" to "UPI QR", "credit" to "Khata / Credit").forEach { (method, label) ->
                             FilterChip(
                                 selected = paymentMethod == method,
-                                onClick = { paymentMethod = method },
+                                onClick = {
+                                    paymentMethod = method
+                                    if (method == "upi" && cartLines.isNotEmpty()) {
+                                        showPaymentQrDialog = true
+                                    }
+                                },
                                 label = { Text(label, fontSize = 13.sp) },
                                 modifier = Modifier.weight(1f)
                             )
+                        }
+                    }
+
+                    if (paymentMethod == "upi" && cartLines.isNotEmpty()) {
+                        OutlinedButton(
+                            onClick = { showPaymentQrDialog = true },
+                            modifier = Modifier.fillMaxWidth().padding(top = 2.dp),
+                            shape = RoundedCornerShape(10.dp),
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = GreenPrimary)
+                        ) {
+                            Icon(Icons.Default.QrCode2, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Text("Show Customer UPI QR Code ($currencySymbol%.2f)".format(runningTotal), fontWeight = FontWeight.Bold, fontSize = 13.sp)
                         }
                     }
 
@@ -357,22 +412,10 @@ fun ManualBillingScreen(
                     LiquidGlassButton(
                         onClick = {
                             if (cartLines.isEmpty()) return@LiquidGlassButton
-                            isSavingBill = true
-                            coroutineScope.launch {
-                                try {
-                                    val sale = billingRepository.completeSale(
-                                        shopId = shopId,
-                                        shopName = shopName,
-                                        cartLines = cartLines.toList(),
-                                        paymentMethod = paymentMethod,
-                                        currencySymbol = currencySymbol
-                                    )
-                                    completedSale = sale
-                                } catch (e: Exception) {
-                                    // Plain language error
-                                } finally {
-                                    isSavingBill = false
-                                }
+                            if (paymentMethod == "upi") {
+                                showPaymentQrDialog = true
+                            } else {
+                                executeSaveBill()
                             }
                         },
                         modifier = Modifier
@@ -508,6 +551,21 @@ fun ManualBillingScreen(
                 ) {
                     Text("New Bill")
                 }
+            }
+        )
+    }
+
+    if (showPaymentQrDialog) {
+        PaymentQrDialog(
+            shopName = shopName,
+            totalAmount = runningTotal,
+            currencySymbol = currencySymbol,
+            qrCodes = qrCodes,
+            defaultUpiId = defaultUpiId,
+            onDismiss = { showPaymentQrDialog = false },
+            onPaymentConfirmed = {
+                showPaymentQrDialog = false
+                executeSaveBill()
             }
         )
     }

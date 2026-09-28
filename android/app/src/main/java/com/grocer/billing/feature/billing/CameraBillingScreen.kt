@@ -22,6 +22,7 @@ import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -53,6 +54,8 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import com.grocer.billing.core.data.local.entities.ItemEntity
+import com.grocer.billing.core.data.model.UpiQrCode
+import com.grocer.billing.core.data.repository.AuthRepository
 import com.grocer.billing.core.data.repository.BillingRepository
 import com.grocer.billing.core.data.repository.CartLine
 import com.grocer.billing.core.data.repository.CompletedSale
@@ -78,6 +81,7 @@ fun CameraBillingScreen(
     itemRepository: ItemRepository,
     billingRepository: BillingRepository,
     embeddingRepository: EmbeddingRepository,
+    authRepository: AuthRepository? = null,
     onNavigateBack: () -> Unit,
     onOpenManualPicker: () -> Unit
 ) {
@@ -113,7 +117,7 @@ fun CameraBillingScreen(
     }
 
     val allCatalogItems by itemRepository.observeItems(shopId, lowestStockFirst = false)
-        .collectAsState(initial = emptyList())
+        .collectAsStateWithLifecycle(initialValue = emptyList())
 
     val cameraExecutor = remember { Executors.newSingleThreadExecutor() }
     var cameraProviderRef by remember { mutableStateOf<ProcessCameraProvider?>(null) }
@@ -122,6 +126,17 @@ fun CameraBillingScreen(
 
     val cartLines = remember { mutableStateListOf<CartLine>() }
     var paymentMethod by remember { mutableStateOf("cash") }
+
+    var qrCodes by remember { mutableStateOf<List<UpiQrCode>>(emptyList()) }
+    var defaultUpiId by remember { mutableStateOf<String?>(null) }
+    var showPaymentQrDialog by remember { mutableStateOf(false) }
+
+    LaunchedEffect(authRepository) {
+        if (authRepository != null) {
+            qrCodes = authRepository.getQrCodes()
+            defaultUpiId = authRepository.getActiveShop()?.upiId
+        }
+    }
 
     // Live Camera candidate recognition states
     var detectedCandidates by remember { mutableStateOf<List<RecognitionMatch>>(emptyList()) }
@@ -136,6 +151,26 @@ fun CameraBillingScreen(
     var showClearBillConfirm by remember { mutableStateOf(false) }
     var completedSale by remember { mutableStateOf<CompletedSale?>(null) }
     var isSavingBill by remember { mutableStateOf(false) }
+
+    fun executeSaveBill() {
+        if (cartLines.isEmpty() || isSavingBill) return
+        isSavingBill = true
+        coroutineScope.launch {
+            try {
+                val sale = billingRepository.completeSale(
+                    shopId = shopId,
+                    shopName = shopName,
+                    cartLines = cartLines.toList(),
+                    paymentMethod = paymentMethod,
+                    currencySymbol = currencySymbol
+                )
+                completedSale = sale
+            } catch (_: Exception) {
+            } finally {
+                isSavingBill = false
+            }
+        }
+    }
 
     var showManualAddDialog by remember { mutableStateOf(false) }
     var editingCartLine by remember { mutableStateOf<CartLine?>(null) }
@@ -764,10 +799,28 @@ fun CameraBillingScreen(
                         listOf("cash" to "Cash", "upi" to "UPI QR", "credit" to "Khata").forEach { (method, label) ->
                             FilterChip(
                                 selected = paymentMethod == method,
-                                onClick = { paymentMethod = method },
+                                onClick = {
+                                    paymentMethod = method
+                                    if (method == "upi" && cartLines.isNotEmpty()) {
+                                        showPaymentQrDialog = true
+                                    }
+                                },
                                 label = { Text(label, fontSize = 12.sp) },
                                 modifier = Modifier.weight(1f)
                             )
+                        }
+                    }
+
+                    if (paymentMethod == "upi" && cartLines.isNotEmpty()) {
+                        OutlinedButton(
+                            onClick = { showPaymentQrDialog = true },
+                            modifier = Modifier.fillMaxWidth().padding(top = 2.dp),
+                            shape = RoundedCornerShape(10.dp),
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = GreenPrimary)
+                        ) {
+                            Icon(Icons.Default.QrCode2, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(Modifier.width(6.dp))
+                            Text("Show Customer UPI QR ($currencySymbol%.2f)".format(runningTotal), fontWeight = FontWeight.Bold, fontSize = 12.sp)
                         }
                     }
 
@@ -777,20 +830,10 @@ fun CameraBillingScreen(
                     LiquidGlassButton(
                         onClick = {
                             if (cartLines.isEmpty()) return@LiquidGlassButton
-                            isSavingBill = true
-                            coroutineScope.launch {
-                                try {
-                                    val sale = billingRepository.completeSale(
-                                        shopId = shopId,
-                                        shopName = shopName,
-                                        cartLines = cartLines.toList(),
-                                        paymentMethod = paymentMethod,
-                                        currencySymbol = currencySymbol
-                                    )
-                                    completedSale = sale
-                                } finally {
-                                    isSavingBill = false
-                                }
+                            if (paymentMethod == "upi") {
+                                showPaymentQrDialog = true
+                            } else {
+                                executeSaveBill()
                             }
                         },
                         modifier = Modifier
@@ -979,6 +1022,21 @@ fun CameraBillingScreen(
                 TextButton(onClick = { showDiscardCartConfirm = false }) {
                     Text("Stay on Bill")
                 }
+            }
+        )
+    }
+
+    if (showPaymentQrDialog) {
+        PaymentQrDialog(
+            shopName = shopName,
+            totalAmount = runningTotal,
+            currencySymbol = currencySymbol,
+            qrCodes = qrCodes,
+            defaultUpiId = defaultUpiId,
+            onDismiss = { showPaymentQrDialog = false },
+            onPaymentConfirmed = {
+                showPaymentQrDialog = false
+                executeSaveBill()
             }
         )
     }

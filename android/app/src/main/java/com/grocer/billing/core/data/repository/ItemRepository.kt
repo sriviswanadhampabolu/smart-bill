@@ -20,7 +20,8 @@ class ItemRepository(
     private val syncQueueDao: SyncQueueDao? = null,
     private var syncManager: SyncManager? = null,
     private var vectorCache: VectorCache? = null,
-    private val context: android.content.Context? = null
+    private val context: android.content.Context? = null,
+    private val neonCloudClient: com.grocer.billing.core.data.remote.NeonCloudClient? = null
 ) {
     fun setSyncManager(manager: SyncManager) {
         this.syncManager = manager
@@ -37,6 +38,8 @@ class ItemRepository(
             if (lowestStockFirst) itemDao.observeItemsLowStockFirst(shopId) else itemDao.observeActiveItems(shopId)
         }
     }
+
+    fun getItemsStream(shopId: String): Flow<List<ItemEntity>> = observeItems(shopId, lowestStockFirst = false)
 
     fun observeLowStockAlerts(shopId: String): Flow<List<ItemEntity>> {
         return if (shopId.isBlank()) {
@@ -137,6 +140,7 @@ class ItemRepository(
         vectorCache?.registerItem(item)
         localBackupManager?.triggerAutoBackup(kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO))
         syncManager?.triggerAutoSync(effectiveShopId)
+        neonCloudClient?.pushItem(item)
 
         return item
     }
@@ -162,6 +166,7 @@ class ItemRepository(
         vectorCache?.registerItem(updated)
         localBackupManager?.triggerAutoBackup(kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO))
         syncManager?.triggerAutoSync(item.shopId)
+        neonCloudClient?.pushItem(updated)
     }
 
     suspend fun adjustStock(itemId: String, deltaQty: Double, reason: String) {
@@ -257,6 +262,7 @@ class ItemRepository(
         if (shopId.isNotBlank()) {
             syncManager?.triggerAutoSync(shopId)
         }
+        neonCloudClient?.deleteItem(itemId)
     }
 
     suspend fun deactivateItem(itemId: String) {

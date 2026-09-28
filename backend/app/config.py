@@ -30,6 +30,22 @@ class Settings(BaseSettings):
         if url.startswith("postgres://"):
             url = url.replace("postgres://", "postgresql://", 1)
         return url
+
+    @property
+    def async_database_url(self) -> str:
+        """
+        Converts the database URL to use the asyncpg driver (postgresql+asyncpg://)
+        with appropriate SSL options for high-performance async SQLAlchemy with Neon Serverless Postgres.
+        """
+        url = self.DATABASE_URL_POOLED or self.DATABASE_URL
+        if url.startswith("postgres://"):
+            url = url.replace("postgres://", "postgresql+asyncpg://", 1)
+        elif url.startswith("postgresql://"):
+            url = url.replace("postgresql://", "postgresql+asyncpg://", 1)
+        # asyncpg accepts ssl=require instead of sslmode=require
+        if "sslmode=" in url:
+            url = url.replace("sslmode=require", "ssl=require").replace("sslmode=prefer", "ssl=prefer")
+        return url
     
     # JWT security
     SECRET_KEY: str = "kirana-super-secret-counter-billing-key-change-in-production"

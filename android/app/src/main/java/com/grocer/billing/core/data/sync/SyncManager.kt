@@ -55,6 +55,21 @@ class SyncManager(
     }
 
     /**
+     * Queries if any local Room bills or Khata ledger changes have not yet been synced to cloud.
+     */
+    suspend fun hasPendingOfflineData(): Boolean = withContext(Dispatchers.IO) {
+        val unsyncedBills = billDao.getUnsyncedBillsCount()
+        val pendingQueue = syncQueueDao.getPendingCount()
+        unsyncedBills > 0 || pendingQueue > 0
+    }
+
+    suspend fun getPendingOfflineCount(): Int = withContext(Dispatchers.IO) {
+        val unsyncedBills = billDao.getUnsyncedBillsCount()
+        val pendingQueue = syncQueueDao.getPendingCount()
+        maxOf(unsyncedBills, pendingQueue)
+    }
+
+    /**
      * Flushes local pending mutations to the remote backend idempotently.
      * Guaranteed to never double-post bills or drop data during network disruptions.
      */

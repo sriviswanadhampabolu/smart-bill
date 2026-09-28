@@ -64,7 +64,13 @@ def signup(request: SignupRequest, db: Session = Depends(get_db)):
 @router.post("/login", response_model=TokenResponse)
 def login(request: LoginRequest, db: Session = Depends(get_db)):
     clean_phone = request.phone.strip()
-    shop = db.query(Shop).filter(Shop.phone == clean_phone).first()
+    if not clean_phone:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Valid phone number is required."
+        )
+    # Strictly query records mapping the unique payload phone number parameter
+    shop = db.query(Shop).filter(Shop.phone == clean_phone).one_or_none()
     if not shop:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -104,8 +110,23 @@ def login(request: LoginRequest, db: Session = Depends(get_db)):
 
 @router.post("/google", response_model=TokenResponse)
 def google_auth(request: GoogleAuthRequest, db: Session = Depends(get_db)):
-    """Google authorization endpoint for instant login/registration."""
+    """Google authorization endpoint for instant login/registration via Android Credential Manager."""
     clean_email = request.email.strip().lower()
+    
+    # Process Google ID token if provided
+    if request.id_token:
+        try:
+            from jose import jwt
+            claims = jwt.get_unverified_claims(request.id_token)
+            if claims.get("email"):
+                clean_email = claims["email"].strip().lower()
+            if not request.display_name and claims.get("name"):
+                request.display_name = claims["name"]
+            if not request.photo_url and claims.get("picture"):
+                request.photo_url = claims["picture"]
+        except Exception:
+            pass
+
     shop = db.query(Shop).filter(Shop.email == clean_email).first()
     
     if not shop and request.phone:
@@ -152,7 +173,13 @@ def google_auth(request: GoogleAuthRequest, db: Session = Depends(get_db)):
 @router.post("/pin-login", response_model=TokenResponse)
 def pin_login(request: PinLoginRequest, db: Session = Depends(get_db)):
     """Fast counter PIN unlock for shop owner standing at billing desk."""
-    shop = db.query(Shop).filter(Shop.phone == request.phone.strip()).first()
+    clean_phone = request.phone.strip()
+    if not clean_phone:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Valid phone number is required."
+        )
+    shop = db.query(Shop).filter(Shop.phone == clean_phone).one_or_none()
     if not shop or not shop.pin_hash:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

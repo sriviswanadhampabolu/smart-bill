@@ -47,6 +47,8 @@ class BillingRepository(
         this.syncManager = manager
     }
     fun observeBills(shopId: String): Flow<List<BillEntity>> = billDao.observeBills(shopId)
+    fun getBillsStream(shopId: String): Flow<List<BillEntity>> = billDao.getBillsStream(shopId)
+    suspend fun getUnsyncedBillsCount(): Int = billDao.getUnsyncedBillsCount()
 
     fun observeTodaySales(shopId: String): Flow<Double> {
         val startOfDay = getStartOfDayEpoch()

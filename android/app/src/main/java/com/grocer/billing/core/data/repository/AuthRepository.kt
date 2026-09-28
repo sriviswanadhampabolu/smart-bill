@@ -17,14 +17,38 @@ import kotlinx.coroutines.flow.Flow
 import org.json.JSONObject
 import java.security.MessageDigest
 
+import com.grocer.billing.core.data.local.AppDatabase
+import com.grocer.billing.core.data.local.dao.ItemDao
+import com.grocer.billing.core.data.remote.NeonCloudClient
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+
+sealed class ClearSessionResult {
+    data object Success : ClearSessionResult()
+    data class BlockedPendingData(
+        val pendingCount: Int,
+        val message: String
+    ) : ClearSessionResult()
+    data class Error(val error: Throwable) : ClearSessionResult()
+}
+
 class AuthRepository(
     private val shopDao: ShopDao,
-    context: Context,
+    private val context: Context,
     private val retrofitClient: RetrofitClient? = null,
-    private var syncManager: SyncManager? = null
+    private var syncManager: SyncManager? = null,
+    private val neonCloudClient: NeonCloudClient? = null,
+    private val itemDao: ItemDao? = null,
+    private var database: AppDatabase? = null
 ) {
     private val prefs: SharedPreferences = context.getSharedPreferences("kirana_auth_prefs", Context.MODE_PRIVATE)
     private val gson = Gson()
+
+    fun setDatabase(db: AppDatabase) {
+        this.database = db
+    }
+
+    fun getNeonCloudClient(): NeonCloudClient? = neonCloudClient
 
     fun setSyncManager(manager: SyncManager) {
         this.syncManager = manager
@@ -95,38 +119,71 @@ class AuthRepository(
         upiId: String? = null,
         token: String? = null
     ): ShopEntity {
-        var remoteShopId: String? = null
-        var remoteToken = token
         val cleanPhone = phone.trim()
+        val effectivePin = pin?.trim()?.ifBlank { "1234" } ?: "1234"
+        var cloudShop: ShopEntity? = null
+        var remoteToken = token
 
-        // Try registering with remote Neon backend API
-        val api = retrofitClient?.getApiService()
-        if (api != null) {
+        // 1. Register with direct Neon Cloud PostgreSQL
+        if (neonCloudClient != null) {
             try {
-                val signupReq = SignupRequestDto(
-                    shop_name = shopName.trim(),
-                    owner_name = ownerName.trim(),
+                val cloudRes = neonCloudClient.registerShop(
+                    shopName = shopName.trim(),
+                    ownerName = ownerName.trim(),
                     phone = cleanPhone,
+                    pin = effectivePin,
                     email = email?.trim(),
                     address = address?.trim(),
-                    pin = pin?.trim(),
-                    upi_id = upiId?.trim()
+                    upiId = upiId?.trim(),
+                    currencySymbol = "₹"
                 )
-                val resp = api.signup(signupReq)
-                if (resp.isSuccessful && resp.body() != null) {
-                    val body = resp.body()!!
-                    remoteToken = body.access_token
-                    remoteShopId = body.shop_id
+                if (cloudRes.isSuccess) {
+                    cloudShop = cloudRes.getOrNull()
                 }
-            } catch (_: Exception) {
-                // Network unavailable: proceed with local setup
+            } catch (_: Exception) {}
+        }
+
+        // 2. Fallback to remote FastAPI server if available
+        if (cloudShop == null) {
+            val api = retrofitClient?.getApiService()
+            if (api != null) {
+                try {
+                    val signupReq = SignupRequestDto(
+                        shop_name = shopName.trim(),
+                        owner_name = ownerName.trim(),
+                        phone = cleanPhone,
+                        email = email?.trim(),
+                        address = address?.trim(),
+                        pin = effectivePin,
+                        upi_id = upiId?.trim()
+                    )
+                    val resp = api.signup(signupReq)
+                    if (resp.isSuccessful && resp.body() != null) {
+                        val body = resp.body()!!
+                        remoteToken = body.access_token
+                        cloudShop = ShopEntity(
+                            id = body.shop_id,
+                            name = shopName.trim(),
+                            ownerName = ownerName.trim(),
+                            phone = cleanPhone,
+                            email = email?.trim(),
+                            address = address?.trim() ?: "",
+                            upiId = upiId?.trim(),
+                            currencySymbol = body.currency_symbol,
+                            pinHash = hashPin(effectivePin)
+                        )
+                    }
+                } catch (_: Exception) {}
             }
         }
 
-        val pinHash = pin?.let { hashPin(it) }
+        val pinHash = hashPin(effectivePin)
         val existingShop = shopDao.getShopByPhone(cleanPhone) ?: shopDao.getActiveShop()
 
-        val shop = if (existingShop != null) {
+        val shop = if (cloudShop != null) {
+            shopDao.insertShop(cloudShop)
+            cloudShop
+        } else if (existingShop != null) {
             val updated = existingShop.copy(
                 name = shopName.trim(),
                 ownerName = ownerName.trim(),
@@ -134,14 +191,14 @@ class AuthRepository(
                 email = email?.trim() ?: existingShop.email,
                 address = address?.trim() ?: existingShop.address,
                 upiId = upiId?.trim() ?: existingShop.upiId,
-                pinHash = pinHash ?: existingShop.pinHash,
+                pinHash = pinHash,
                 updatedAt = System.currentTimeMillis()
             )
             shopDao.updateShop(updated)
             updated
         } else {
             val newShop = ShopEntity(
-                id = remoteShopId ?: java.util.UUID.randomUUID().toString(),
+                id = java.util.UUID.randomUUID().toString(),
                 name = shopName.trim(),
                 ownerName = ownerName.trim(),
                 phone = cleanPhone,
@@ -174,7 +231,48 @@ class AuthRepository(
         val cleanPin = pin.trim()
         val inputPinHash = hashPin(cleanPin)
 
-        // 1. Try remote cloud authentication with Neon PostgreSQL
+        // 1. Direct Cloud Authentication with Neon PostgreSQL (Works across all devices!)
+        if (neonCloudClient != null) {
+            val cloudRes = neonCloudClient.loginWithPin(cleanPhone, cleanPin)
+            if (cloudRes.isSuccess) {
+                val cloudShop = cloudRes.getOrThrow()
+                shopDao.insertShop(cloudShop)
+
+                // Restore items from cloud catalog if local is empty or syncing
+                if (itemDao != null) {
+                    try {
+                        val cloudItems = neonCloudClient.pullItemsForShop(cloudShop.id)
+                        if (cloudItems.isNotEmpty()) {
+                            itemDao.insertItems(cloudItems)
+                        }
+                    } catch (_: Exception) {}
+                }
+
+                prefs.edit()
+                    .putBoolean(KEY_IS_LOGGED_IN, true)
+                    .putString(KEY_SHOP_ID, cloudShop.id)
+                    .putString(KEY_LAST_PHONE, cleanPhone)
+                    .putString(KEY_LAST_SHOP_NAME, cloudShop.name)
+                    .putString(KEY_LAST_OWNER_NAME, cloudShop.ownerName)
+                    .putString(KEY_USER_EMAIL, cloudShop.email ?: "")
+                    .putBoolean(KEY_IS_LOCKED, false)
+                    .apply()
+
+                syncManager?.pullFullShopData(cloudShop.id)
+                return Result.success(cloudShop)
+            } else {
+                val err = cloudRes.exceptionOrNull()
+                val errMsg = err?.localizedMessage ?: ""
+                // If it was a definitive auth rejection (account not found or wrong PIN), fail immediately!
+                if (errMsg.contains("No account found", ignoreCase = true) ||
+                    errMsg.contains("Incorrect", ignoreCase = true) ||
+                    errMsg.contains("PIN", ignoreCase = true)) {
+                    return Result.failure(err ?: Exception("Invalid login credentials"))
+                }
+            }
+        }
+
+        // 2. Try remote FastAPI server if available
         val api = retrofitClient?.getApiService()
         if (api != null) {
             try {
@@ -218,72 +316,86 @@ class AuthRepository(
                         .putBoolean(KEY_IS_LOCKED, false)
                         .apply()
 
-                    // Automatically restore all catalog items, embeddings, and billing records from cloud
                     syncManager?.pullFullShopData(shop.id)
-
                     return Result.success(shop)
                 }
-            } catch (_: Exception) {
-                // Network error: fall back to local database
-            }
+            } catch (_: Exception) {}
         }
 
-        // 2. Offline / Local fallback
-        var shop = shopDao.getShopByPhone(cleanPhone)
-
+        // 3. Offline fallback to local SQLite database
+        val shop = shopDao.getShopByPhone(cleanPhone)
         if (shop != null) {
             val storedHash = shop.pinHash ?: hashPin("1234")
             if (storedHash != inputPinHash && cleanPin != "1234") {
                 return Result.failure(Exception("Incorrect PIN for this mobile number"))
             }
-        } else {
-            val existingActive = shopDao.getActiveShop()
-            if (existingActive != null) {
-                val storedHash = existingActive.pinHash ?: hashPin("1234")
-                if (storedHash == inputPinHash || cleanPin == "1234") {
-                    shop = existingActive
-                } else {
-                    return Result.failure(Exception("Incorrect PIN for this mobile number"))
-                }
-            } else {
-                shop = createLocalShop(
-                    shopName = "Kirana Store",
-                    ownerName = "Shop Owner",
-                    phone = cleanPhone,
-                    pin = cleanPin
-                )
-            }
+
+            prefs.edit()
+                .putBoolean(KEY_IS_LOGGED_IN, true)
+                .putString(KEY_SHOP_ID, shop.id)
+                .putString(KEY_LAST_PHONE, cleanPhone)
+                .putString(KEY_LAST_SHOP_NAME, shop.name)
+                .putString(KEY_LAST_OWNER_NAME, shop.ownerName)
+                .putString(KEY_USER_EMAIL, shop.email ?: "")
+                .putBoolean(KEY_IS_LOCKED, false)
+                .apply()
+
+            return Result.success(shop)
         }
 
-        prefs.edit()
-            .putBoolean(KEY_IS_LOGGED_IN, true)
-            .putString(KEY_SHOP_ID, shop.id)
-            .putString(KEY_LAST_PHONE, cleanPhone)
-            .putString(KEY_LAST_SHOP_NAME, shop.name)
-            .putString(KEY_LAST_OWNER_NAME, shop.ownerName)
-            .putBoolean(KEY_IS_LOCKED, false)
-            .apply()
-
-        return Result.success(shop)
+        // DO NOT create a dummy account! Fail with clear message
+        return Result.failure(Exception("Account not found with mobile number $cleanPhone. Please connect to internet to sync your cloud account, or register a new shop."))
     }
 
     suspend fun loginWithGoogle(
         email: String,
         displayName: String,
+        idToken: String? = null,
         photoUrl: String? = null,
         phone: String? = null
     ): Result<ShopEntity> {
         val cleanEmail = email.trim().lowercase()
         var remoteToken: String? = null
-        var remoteShopId: String? = null
 
-        // 1. Try remote cloud auth with Neon
+        // 1. Direct Cloud Authentication with Neon PostgreSQL
+        if (neonCloudClient != null) {
+            val cloudRes = neonCloudClient.loginWithGoogle(cleanEmail, displayName, phone)
+            if (cloudRes.isSuccess) {
+                val cloudShop = cloudRes.getOrThrow()
+                shopDao.insertShop(cloudShop)
+
+                if (itemDao != null) {
+                    try {
+                        val cloudItems = neonCloudClient.pullItemsForShop(cloudShop.id)
+                        if (cloudItems.isNotEmpty()) {
+                            itemDao.insertItems(cloudItems)
+                        }
+                    } catch (_: Exception) {}
+                }
+
+                prefs.edit()
+                    .putBoolean(KEY_IS_LOGGED_IN, true)
+                    .putString(KEY_SHOP_ID, cloudShop.id)
+                    .putString(KEY_USER_EMAIL, cleanEmail)
+                    .putString(KEY_LAST_OWNER_NAME, cloudShop.ownerName)
+                    .putString(KEY_LAST_SHOP_NAME, cloudShop.name)
+                    .putString(KEY_LAST_PHONE, cloudShop.phone)
+                    .putBoolean(KEY_IS_LOCKED, false)
+                    .apply()
+
+                syncManager?.pullFullShopData(cloudShop.id)
+                return Result.success(cloudShop)
+            }
+        }
+
+        // 2. Try remote FastAPI server if available
         val api = retrofitClient?.getApiService()
         if (api != null) {
             try {
                 val req = GoogleAuthRequestDto(
                     email = cleanEmail,
                     display_name = displayName.trim(),
+                    id_token = idToken,
                     photo_url = photoUrl,
                     phone = phone?.trim()
                 )
@@ -291,11 +403,8 @@ class AuthRepository(
                 if (resp.isSuccessful && resp.body() != null) {
                     val body = resp.body()!!
                     remoteToken = body.access_token
-                    remoteShopId = body.shop_id
                 }
-            } catch (_: Exception) {
-                // Offline fallback
-            }
+            } catch (_: Exception) {}
         }
 
         val existingShop = shopDao.getActiveShop()
@@ -309,7 +418,7 @@ class AuthRepository(
             updated
         } else {
             val newShop = ShopEntity(
-                id = remoteShopId ?: java.util.UUID.randomUUID().toString(),
+                id = java.util.UUID.randomUUID().toString(),
                 name = "${displayName.trim()}'s Store",
                 ownerName = displayName.trim(),
                 phone = phone?.trim() ?: "g_${cleanEmail.take(10)}",
@@ -359,7 +468,10 @@ class AuthRepository(
             .putString(KEY_LAST_PHONE, updated.phone)
             .apply()
 
-        // Sync to remote Neon DB
+        // Sync to Neon Cloud directly
+        neonCloudClient?.updateShop(updated)
+
+        // Sync to remote FastAPI DB if configured
         val api = retrofitClient?.getApiService()
         if (api != null) {
             try {
@@ -448,6 +560,7 @@ class AuthRepository(
                 updatedAt = System.currentTimeMillis()
             )
             shopDao.updateShop(updated)
+            neonCloudClient?.updateShop(updated)
         } catch (_: Exception) {}
     }
 
@@ -481,6 +594,52 @@ class AuthRepository(
         prefs.edit().putBoolean(KEY_IS_LOCKED, false).apply()
     }
 
+    fun getSyncManager(): SyncManager? = syncManager
+
+    suspend fun hasPendingOfflineData(): Boolean {
+        return syncManager?.hasPendingOfflineData() ?: false
+    }
+
+    /**
+     * Safely clears the local session:
+     * FIRST checks if there is pending offline data (unsynced bills, credit ledger transactions).
+     * If pending data exists and force == false, returns ClearSessionResult.BlockedPendingData.
+     * If force == true or all data is synced, safely clears all Room tables and wipes auth tokens.
+     */
+    suspend fun clearLocalSession(force: Boolean = false): ClearSessionResult = withContext(Dispatchers.IO) {
+        try {
+            val hasPending = syncManager?.hasPendingOfflineData() ?: false
+            if (hasPending && !force) {
+                val pendingCount = syncManager?.getPendingOfflineCount() ?: 1
+                return@withContext ClearSessionResult.BlockedPendingData(
+                    pendingCount = pendingCount,
+                    message = "Cannot switch account: You have $pendingCount unsynced counter transaction(s). Please sync first or choose Logout Anyway to proceed."
+                )
+            }
+
+            // Safe to clear Room tables since all data is synced with Neon cloud or forced
+            database?.clearAllTables()
+
+            // Wipe auth token & session preferences
+            prefs.edit()
+                .putBoolean(KEY_IS_LOGGED_IN, false)
+                .putBoolean(KEY_IS_LOCKED, true)
+                .remove(KEY_AUTH_TOKEN)
+                .remove(KEY_SHOP_ID)
+                .apply()
+
+            // Also clear token in network prefs for Retrofit
+            context.getSharedPreferences("kirana_network_prefs", Context.MODE_PRIVATE)
+                .edit()
+                .remove("auth_token")
+                .apply()
+
+            ClearSessionResult.Success
+        } catch (e: Exception) {
+            ClearSessionResult.Error(e)
+        }
+    }
+
     fun logout() {
         val lastPhone = getLastPhoneNumber()
         val lastShop = getLastShopName()
@@ -496,6 +655,11 @@ class AuthRepository(
             .putString(KEY_LAST_SHOP_NAME, lastShop)
             .putString(KEY_LAST_OWNER_NAME, lastOwner)
             .putString(KEY_USER_EMAIL, email)
+            .apply()
+
+        context.getSharedPreferences("kirana_network_prefs", Context.MODE_PRIVATE)
+            .edit()
+            .remove("auth_token")
             .apply()
     }
 

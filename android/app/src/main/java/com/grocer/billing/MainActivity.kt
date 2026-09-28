@@ -19,6 +19,7 @@ import androidx.compose.material.icons.filled.Receipt
 import androidx.compose.material.icons.automirrored.filled.ReceiptLong
 import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -33,6 +34,10 @@ import androidx.core.content.ContextCompat
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.launch
+import com.grocer.billing.core.data.repository.ClearSessionResult
 import com.grocer.billing.core.data.repository.BillingRepository
 import com.grocer.billing.core.data.repository.ItemRepository
 import com.grocer.billing.feature.account.AccountDashboardScreen
@@ -65,12 +70,13 @@ class MainActivity : FragmentActivity() {
                 val navController = rememberNavController()
                 val isUserLoggedIn = remember { authRepo.isUserLoggedIn() }
                 val isAppLocked = remember { authRepo.isAppLocked() }
-                val activeShop by authRepo.observeActiveShop().collectAsState(initial = null)
+                val activeShop by authRepo.observeActiveShop().collectAsStateWithLifecycle(initialValue = null)
                 val currentShopId = activeShop?.id ?: authRepo.getActiveShopId() ?: ""
 
                 val startDestination = when {
                     !isUserLoggedIn -> "auth"
-                    else -> "pin_unlock"
+                    isAppLocked -> "pin_unlock"
+                    else -> "dashboard"
                 }
 
                 NavHost(navController = navController, startDestination = startDestination) {
@@ -88,6 +94,11 @@ class MainActivity : FragmentActivity() {
                                     else -> "dashboard"
                                 }
                                 navController.navigate(dest) {
+                                    popUpTo("auth") { inclusive = true }
+                                }
+                            },
+                            onNavigateToDashboard = {
+                                navController.navigate("dashboard") {
                                     popUpTo("auth") { inclusive = true }
                                 }
                             }
@@ -134,9 +145,11 @@ class MainActivity : FragmentActivity() {
                                 }
                             },
                             onLogout = {
-                                authRepo.logout()
-                                navController.navigate("auth") {
-                                    popUpTo(0) { inclusive = true }
+                                lifecycleScope.launch {
+                                    authRepo.logout()
+                                    navController.navigate("auth") {
+                                        popUpTo(0) { inclusive = true }
+                                    }
                                 }
                             }
                         )
@@ -180,17 +193,19 @@ class MainActivity : FragmentActivity() {
                     composable("dashboard") {
                         val shop = activeShop
                         val shopId = currentShopId.ifBlank { shop?.id ?: "" }
-                        val todaySales by billingRepo.observeTodaySales(shopId).collectAsState(initial = 0.0)
-                        val todayBillsCount by billingRepo.observeTodayBillsCount(shopId).collectAsState(initial = 0)
-                        val monthSales by billingRepo.observeMonthSales(shopId).collectAsState(initial = 0.0)
-                        val monthBillsCount by billingRepo.observeMonthBillsCount(shopId).collectAsState(initial = 0)
-                        val lowStockItems by itemRepo.observeLowStockAlerts(shopId).collectAsState(initial = emptyList())
+                        val todaySales by billingRepo.observeTodaySales(shopId).collectAsStateWithLifecycle(initialValue = 0.0)
+                        val todayBillsCount by billingRepo.observeTodayBillsCount(shopId).collectAsStateWithLifecycle(initialValue = 0)
+                        val monthSales by billingRepo.observeMonthSales(shopId).collectAsStateWithLifecycle(initialValue = 0.0)
+                        val monthBillsCount by billingRepo.observeMonthBillsCount(shopId).collectAsStateWithLifecycle(initialValue = 0)
+                        val lowStockItems by itemRepo.observeLowStockAlerts(shopId).collectAsStateWithLifecycle(initialValue = emptyList())
 
                         // Preload catalog into VectorCache
-                        val items by itemRepo.observeItems(shopId).collectAsState(initial = emptyList())
+                        val items by itemRepo.observeItems(shopId).collectAsStateWithLifecycle(initialValue = emptyList())
                         LaunchedEffect(items, shopId) {
                             app.embeddingRepository.preloadAllVectorsToCache(shopId)
                         }
+                        val isCloudConnected by app.retrofitClient.isCloudConnected.collectAsStateWithLifecycle(initialValue = true)
+                        val isOfflineMode = !isCloudConnected
 
                         DashboardScreen(
                             appName = shop?.name ?: "Smart Bill",
@@ -200,6 +215,7 @@ class MainActivity : FragmentActivity() {
                             monthSales = monthSales,
                             monthBillsCount = monthBillsCount,
                             lowStockCount = lowStockItems.size,
+                            isOfflineMode = isOfflineMode,
                             showResumeSetup = !onboardingRepo.isOnboardingCompleted(),
                             onResumeSetupClicked = { navController.navigate("onboarding_wizard") },
                             onNewBillClicked = { navController.navigate("camera_billing") },
@@ -229,6 +245,7 @@ class MainActivity : FragmentActivity() {
                             itemRepository = itemRepo,
                             billingRepository = billingRepo,
                             embeddingRepository = app.embeddingRepository,
+                            authRepository = authRepo,
                             onNavigateBack = { navController.popBackStack() },
                             onOpenManualPicker = { navController.navigate("billing") }
                         )
@@ -272,6 +289,7 @@ class MainActivity : FragmentActivity() {
                             currencySymbol = shop?.currencySymbol ?: "₹",
                             itemRepository = itemRepo,
                             billingRepository = billingRepo,
+                            authRepository = authRepo,
                             onNavigateBack = { navController.popBackStack() }
                         )
                     }
@@ -372,6 +390,7 @@ fun DashboardScreen(
     monthSales: Double = 0.0,
     monthBillsCount: Int = 0,
     lowStockCount: Int,
+    isOfflineMode: Boolean = false,
     showResumeSetup: Boolean = false,
     onResumeSetupClicked: () -> Unit = {},
     onNewBillClicked: () -> Unit,
@@ -435,6 +454,43 @@ fun DashboardScreen(
                     .padding(20.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
+                // Offline Mode Status Banner
+                if (isOfflineMode) {
+                    LiquidGlassCard(
+                        modifier = Modifier.fillMaxWidth(),
+                        tint = Color(0xFFFEF3C7).copy(alpha = 0.95f),
+                        onClick = {}
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(34.dp)
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(Color(0xFFD97706).copy(alpha = 0.20f)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(Icons.Default.Sync, contentDescription = null, tint = Color(0xFFB45309), modifier = Modifier.size(18.dp))
+                            }
+                            Spacer(modifier = Modifier.width(12.dp))
+                            Column {
+                                Text(
+                                    text = "Offline Mode Active",
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color(0xFF92400E)
+                                )
+                                Text(
+                                    text = "Counter billing & Room DB are 100% operational. Invoices will auto-sync when online.",
+                                    fontSize = 11.sp,
+                                    color = Color(0xFFB45309)
+                                )
+                            }
+                        }
+                    }
+                }
+
                 // Resume Setup Glass Card if first-run setup was skipped
                 if (showResumeSetup) {
                     LiquidGlassCard(
