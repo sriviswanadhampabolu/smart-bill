@@ -8,7 +8,7 @@ This folder contains pre-built Android application packages (`.apk`) for **Smart
 
 | File | Size | Architecture | Target SDK | SHA-256 Checksum |
 | :--- | :--- | :--- | :--- | :--- |
-| **[`SmartBill-v1.4.0.apk`](./SmartBill-v1.4.0.apk)** | ~38.3 MB | universal (arm64-v8a, armeabi-v7a, x86_64) | Android 15 (API 35) / Min Android 7.0 (API 24) | `91220C566D5E9CC01EBF5AF9E7C54D6C205DF03998AA67C75F4384FF9C17DCCB` |
+| **[`SmartBill-v1.4.0.apk`](./SmartBill-v1.4.0.apk)** | ~38.3 MB | universal (arm64-v8a, armeabi-v7a, x86_64) | Android 15 (API 35) / Min Android 7.0 (API 24) | `7BBD57EEBA0CED90254A6EB3D5705778485CBE27F40125509C13E70D3420F097` |
 
 ---
 
@@ -16,7 +16,7 @@ This folder contains pre-built Android application packages (`.apk`) for **Smart
 
 - 🔑 **Modern Android Credential Manager Integration**:
   - One-tap **"Sign in with Google"** / **"Register with Google"** using Android's modern `androidx.credentials` and `com.google.android.libraries.identity.googleid` APIs.
-  - Native bottom-sheet authentication with official Google OAuth Client ID (`190960573906-n4jm63dv5fvpf1v5q65gogumchjdb5r9.apps.googleusercontent.com`).
+  - Native bottom-sheet authentication with Google OAuth Web Client ID (`190960573906-i4mlf5kk5k5cnjq4ua6a2b7u2qaprln0.apps.googleusercontent.com`).
   - Seamless fallback and cancellation handling without crashing or blocking users.
 - ⚡ **Direct Routing to Main Dashboard**:
   - Automatically routes authenticated merchants directly to the **Main Dashboard** counter view upon successful Google Sign-In.

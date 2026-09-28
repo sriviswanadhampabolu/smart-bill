@@ -22,10 +22,11 @@ data class GoogleUserData(
 class GoogleAuthCancellationException(message: String = "Sign-in was cancelled.") : Exception(message)
 
 class GoogleAuthManager(
-    private val serverClientId: String = GOOGLE_SERVER_CLIENT_ID
+    private val serverClientId: String = GOOGLE_WEB_CLIENT_ID
 ) {
     companion object {
-        const val GOOGLE_SERVER_CLIENT_ID = "190960573906-n4jm63dv5fvpf1v5q65gogumchjdb5r9.apps.googleusercontent.com"
+        // Google OAuth Web Application Client ID for Credential Manager token retrieval
+        const val GOOGLE_WEB_CLIENT_ID = "190960573906-i4mlf5kk5k5cnjq4ua6a2b7u2qaprln0.apps.googleusercontent.com"
     }
 
     /**
