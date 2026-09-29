@@ -80,23 +80,69 @@ fun AuthScreen(
                 val signInResult = googleAuthManager.signIn(context)
                 if (signInResult.isSuccess) {
                     val googleUser = signInResult.getOrThrow()
-                    val authResult = authRepository.loginWithGoogle(
-                        email = googleUser.email,
-                        displayName = googleUser.displayName,
-                        idToken = googleUser.idToken,
-                        photoUrl = googleUser.photoUrl,
-                        phone = googleUser.phoneNumber ?: phoneInput.takeIf { it.trim().length == 10 }
-                    )
-                    if (authResult.isSuccess) {
-                        // On Success: Route authenticated user to Main Dashboard screen
-                        if (onNavigateToDashboard != null) {
-                            onNavigateToDashboard()
+                    val userEmail = googleUser.email
+                    val userDisplayName = googleUser.displayName ?: "Merchant"
+
+                    if (selectedTab == 0) {
+                        // User Login Tab: verify account exists in Neon database
+                        val authResult = authRepository.loginWithGoogle(
+                            email = userEmail,
+                            displayName = userDisplayName,
+                            idToken = googleUser.idToken,
+                            photoUrl = googleUser.photoUrl,
+                            phone = googleUser.phoneNumber ?: phoneInput.takeIf { it.trim().length == 10 }
+                        )
+                        if (authResult.isSuccess) {
+                            if (onNavigateToDashboard != null) {
+                                onNavigateToDashboard()
+                            } else {
+                                onAuthSuccess(false)
+                            }
                         } else {
-                            onAuthSuccess(false)
+                            val err = authResult.exceptionOrNull()?.localizedMessage
+                                ?: "No store account found for $userEmail. Please register your account."
+                            errorMessage = err
+                            if (err.contains("register", ignoreCase = true) || err.contains("No store account", ignoreCase = true) || err.contains("No account", ignoreCase = true)) {
+                                selectedTab = 1
+                                if (regOwnerName.isBlank()) regOwnerName = userDisplayName
+                                if (regShopName.isBlank()) regShopName = "${userDisplayName}'s Store"
+                                if (phoneInput.isBlank() && !googleUser.phoneNumber.isNullOrBlank()) {
+                                    phoneInput = googleUser.phoneNumber!!.filter { it.isDigit() }.takeLast(10)
+                                }
+                            }
                         }
                     } else {
-                        errorMessage = authResult.exceptionOrNull()?.localizedMessage
-                            ?: "Failed to authenticate account with cloud service."
+                        // Register Tab: register new store linked with Google account
+                        val effectiveShopName = regShopName.trim().ifBlank { "${userDisplayName}'s Store" }
+                        val effectiveOwnerName = regOwnerName.trim().ifBlank { userDisplayName }
+                        val effectivePhone = phoneInput.trim().takeIf { it.length == 10 }
+                            ?: (googleUser.phoneNumber?.filter { it.isDigit() }?.takeLast(10) ?: "")
+
+                        val regResult = authRepository.registerWithGoogle(
+                            email = userEmail,
+                            displayName = userDisplayName,
+                            shopName = effectiveShopName,
+                            ownerName = effectiveOwnerName,
+                            phone = effectivePhone,
+                            pin = pinInput.trim().ifBlank { "1234" },
+                            address = regAddress.trim(),
+                            upiId = regUpiId.trim().ifBlank { null },
+                            idToken = googleUser.idToken
+                        )
+                        if (regResult.isSuccess) {
+                            if (onNavigateToDashboard != null) {
+                                onNavigateToDashboard()
+                            } else {
+                                onAuthSuccess(true)
+                            }
+                        } else {
+                            val err = regResult.exceptionOrNull()?.localizedMessage
+                                ?: "Failed to register account with Google in Neon database."
+                            errorMessage = err
+                            if (err.contains("already registered", ignoreCase = true)) {
+                                selectedTab = 0
+                            }
+                        }
                     }
                 } else {
                     val ex = signInResult.exceptionOrNull()

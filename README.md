@@ -127,9 +127,9 @@ smart-bill/
 
 The latest production-ready Android APK is available in the [`release/`](./release/) directory:
 
-- **Download**: [`SmartBill-v1.0.0.apk`](release/SmartBill-v1.0.0.apk) (~35.5 MB)
-- **SHA-256 Checksum**: `F08359BEEF0B42773DA3CFDAFA9A1307183AABBB0A173C1A1F682B505A876953`
-- **Supported Android Versions**: Android 8.0 (Oreo / API 26) through Android 14 (API 34)
+- **Download**: [`SmartBill-v1.5.0.apk`](release/SmartBill-v1.5.0.apk) (~38.3 MB)
+- **SHA-256 Checksum**: `EDEC239A7AFC404B0C831474635A1893B458FE90D1C76E72E991C3B529918CA0`
+- **Supported Android Versions**: Android 7.0 (Nougat / API 24) through Android 15 (API 35)
 
 ---
 

@@ -193,6 +193,7 @@ class ItemRepository(
                 )
             )
             syncManager?.triggerAutoSync(currentItem.shopId)
+            neonCloudClient?.pushItem(currentItem)
 
             if (deltaQty < 0 && currentItem.stockQty <= currentItem.lowStockThreshold) {
                 context?.let { ctx ->
@@ -226,6 +227,7 @@ class ItemRepository(
             )
             vectorCache?.registerItem(currentItem)
             syncManager?.triggerAutoSync(currentItem.shopId)
+            neonCloudClient?.pushItem(currentItem)
 
             if (currentItem.stockQty <= newThreshold) {
                 context?.let { ctx ->
@@ -280,6 +282,7 @@ class ItemRepository(
                 )
             )
             syncManager?.triggerAutoSync(currentItem.shopId)
+            neonCloudClient?.pushItem(currentItem)
         }
     }
 

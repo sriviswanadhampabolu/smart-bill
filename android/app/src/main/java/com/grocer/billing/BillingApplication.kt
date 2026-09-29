@@ -114,7 +114,8 @@ class BillingApplication : Application() {
             syncQueueDao = database.syncQueueDao(),
             localBackupManager = localBackupManager,
             syncManager = syncManager,
-            context = this
+            context = this,
+            neonCloudClient = neonCloudClient
         )
 
         onboardingRepository = com.grocer.billing.core.data.repository.OnboardingRepository(

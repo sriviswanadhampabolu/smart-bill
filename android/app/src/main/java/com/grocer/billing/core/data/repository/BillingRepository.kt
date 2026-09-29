@@ -12,6 +12,7 @@ import com.grocer.billing.core.data.local.entities.ItemEntity
 import com.grocer.billing.core.data.local.entities.StockLogEntity
 import com.grocer.billing.core.data.local.entities.SyncQueueEntity
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
@@ -41,7 +42,8 @@ class BillingRepository(
     private val syncQueueDao: SyncQueueDao,
     private val localBackupManager: com.grocer.billing.core.data.backup.LocalBackupManager? = null,
     private var syncManager: com.grocer.billing.core.data.sync.SyncManager? = null,
-    private val context: android.content.Context? = null
+    private val context: android.content.Context? = null,
+    private val neonCloudClient: com.grocer.billing.core.data.remote.NeonCloudClient? = null
 ) {
     fun setSyncManager(manager: com.grocer.billing.core.data.sync.SyncManager) {
         this.syncManager = manager
@@ -166,6 +168,21 @@ class BillingRepository(
 
         // Trigger real-time cloud auto-sync
         syncManager?.triggerAutoSync(shopId)
+
+        // Directly persist bill & updated item stock to Neon Cloud PostgreSQL
+        neonCloudClient?.let { neon ->
+            kotlinx.coroutines.CoroutineScope(kotlinx.coroutines.Dispatchers.IO).launch {
+                try {
+                    neon.pushBill(billEntity, billItemEntities)
+                    for (line in cartLines) {
+                        val updatedItem = itemDao.getItemById(line.item.id)
+                        if (updatedItem != null) {
+                            neon.pushItem(updatedItem)
+                        }
+                    }
+                } catch (_: Exception) {}
+            }
+        }
 
         // Low-stock notification check for items sold
         context?.let { ctx ->

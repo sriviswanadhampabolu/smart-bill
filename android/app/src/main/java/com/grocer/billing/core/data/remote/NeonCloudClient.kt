@@ -1,6 +1,8 @@
 package com.grocer.billing.core.data.remote
 
 import android.content.Context
+import com.grocer.billing.core.data.local.entities.BillEntity
+import com.grocer.billing.core.data.local.entities.BillItemEntity
 import com.grocer.billing.core.data.local.entities.ItemEntity
 import com.grocer.billing.core.data.local.entities.ShopEntity
 import kotlinx.coroutines.Dispatchers
@@ -232,7 +234,7 @@ class NeonCloudClient(private val context: Context) {
         }
     }
 
-    suspend fun loginWithGoogle(email: String, displayName: String, phone: String? = null): Result<ShopEntity> = withContext(Dispatchers.IO) {
+    suspend fun loginWithGoogle(email: String, displayName: String = "", phone: String? = null): Result<ShopEntity> = withContext(Dispatchers.IO) {
         try {
             val cleanEmail = email.trim().lowercase()
             val querySql = "SELECT * FROM shops WHERE LOWER(email) = $1 LIMIT 1;"
@@ -244,7 +246,7 @@ class NeonCloudClient(private val context: Context) {
                 val shop = ShopEntity(
                     id = row.optString("id"),
                     name = row.optString("name"),
-                    ownerName = row.optString("owner_name", displayName),
+                    ownerName = row.optString("owner_name", displayName.ifBlank { "Shop Owner" }),
                     phone = row.optString("phone", phone ?: ""),
                     email = cleanEmail,
                     address = row.optString("address", ""),
@@ -258,15 +260,57 @@ class NeonCloudClient(private val context: Context) {
                 return@withContext Result.success(shop)
             }
 
-            // Register new shop with Google profile
+            // User is NOT registered in database
+            Result.failure(Exception("No store account found for Google account ($cleanEmail). Please switch to the Register tab to create your shop account."))
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun registerShopWithGoogle(
+        email: String,
+        displayName: String,
+        shopName: String,
+        ownerName: String,
+        phone: String,
+        pin: String = "1234",
+        address: String = "",
+        upiId: String? = null
+    ): Result<ShopEntity> = withContext(Dispatchers.IO) {
+        try {
+            val cleanEmail = email.trim().lowercase()
+            val cleanPhone = phone.trim()
+
+            // 1. Check if email already registered
+            val emailRes = executeQuery("SELECT id FROM shops WHERE LOWER(email) = $1 LIMIT 1;", listOf(cleanEmail))
+            val emailRows = emailRes.optJSONArray("rows")
+            if (emailRows != null && emailRows.length() > 0) {
+                return@withContext Result.failure(Exception("An account with email $cleanEmail is already registered. Please switch to User Login."))
+            }
+
+            // 2. Check if phone already registered (if non-empty)
+            if (cleanPhone.isNotBlank() && !cleanPhone.startsWith("g_")) {
+                val phoneRes = executeQuery("SELECT id FROM shops WHERE phone = $1 LIMIT 1;", listOf(cleanPhone))
+                val phoneRows = phoneRes.optJSONArray("rows")
+                if (phoneRows != null && phoneRows.length() > 0) {
+                    return@withContext Result.failure(Exception("A shop with mobile number $cleanPhone is already registered. Please switch to User Login."))
+                }
+            }
+
+            val finalShopName = shopName.trim().ifBlank {
+                if (displayName.isNotBlank()) "${displayName.trim()}'s Store" else "Kirana Store"
+            }
+            val finalOwnerName = ownerName.trim().ifBlank {
+                if (displayName.isNotBlank()) displayName.trim() else "Shop Owner"
+            }
+            val finalPhone = if (cleanPhone.isNotBlank()) cleanPhone else "g_${cleanEmail.replace(Regex("[^a-zA-Z0-9]"), "").take(10)}"
+            val pinHash = hashPin(pin.trim().ifBlank { "1234" })
             val shopId = UUID.randomUUID().toString()
-            val name = if (displayName.isNotBlank()) "${displayName.trim()}'s Store" else "Kirana Store"
-            val owner = displayName.trim().ifBlank { "Merchant" }
-            val cleanPhone = phone?.trim()?.ifBlank { null } ?: "g_${cleanEmail.take(10)}"
-            val pinHash = hashPin("1234")
             val now = System.currentTimeMillis()
+
             val settingsJson = JSONObject().apply {
                 put("auth_provider", "google")
+                put("language", "en")
                 put("qr_codes", JSONArray())
             }.toString()
 
@@ -277,17 +321,28 @@ class NeonCloudClient(private val context: Context) {
 
             executeQuery(
                 insertSql,
-                listOf(shopId, name, owner, cleanPhone, cleanEmail, "", null, "₹", pinHash, settingsJson)
+                listOf(
+                    shopId,
+                    finalShopName,
+                    finalOwnerName,
+                    finalPhone,
+                    cleanEmail,
+                    address.trim(),
+                    upiId?.trim()?.ifBlank { null },
+                    "₹",
+                    pinHash,
+                    settingsJson
+                )
             )
 
             val shop = ShopEntity(
                 id = shopId,
-                name = name,
-                ownerName = owner,
-                phone = cleanPhone,
+                name = finalShopName,
+                ownerName = finalOwnerName,
+                phone = finalPhone,
                 email = cleanEmail,
-                address = "",
-                upiId = null,
+                address = address.trim(),
+                upiId = upiId?.trim()?.ifBlank { null },
                 currencySymbol = "₹",
                 pinHash = pinHash,
                 settingsJson = settingsJson,
@@ -424,6 +479,115 @@ class NeonCloudClient(private val context: Context) {
             Result.success(Unit)
         } catch (e: Exception) {
             Result.failure(e)
+        }
+    }
+
+    suspend fun pushBill(bill: BillEntity, items: List<BillItemEntity>): Result<Unit> = withContext(Dispatchers.IO) {
+        try {
+            val insertBillSql = """
+                INSERT INTO bills (id, shop_id, bill_number, subtotal, discount, tax, total, payment_method, created_at, server_received_at)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, TO_TIMESTAMP($9 / 1000.0), NOW())
+                ON CONFLICT (id) DO UPDATE SET total = EXCLUDED.total, subtotal = EXCLUDED.subtotal, discount = EXCLUDED.discount, tax = EXCLUDED.tax;
+            """.trimIndent()
+
+            executeQuery(
+                insertBillSql,
+                listOf(
+                    bill.id,
+                    bill.shopId,
+                    bill.billNumber,
+                    bill.subtotal,
+                    bill.discount,
+                    bill.tax,
+                    bill.total,
+                    bill.paymentMethod,
+                    bill.createdAt
+                )
+            )
+
+            for (item in items) {
+                val insertItemSql = """
+                    INSERT INTO bill_items (id, bill_id, item_id, name_snapshot, qty, unit_type, unit_price_snapshot, line_total)
+                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+                    ON CONFLICT (id) DO NOTHING;
+                """.trimIndent()
+                executeQuery(
+                    insertItemSql,
+                    listOf(
+                        item.id,
+                        item.billId,
+                        item.itemId,
+                        item.nameSnapshot,
+                        item.qty,
+                        item.unitType,
+                        item.unitPriceSnapshot,
+                        item.lineTotal
+                    )
+                )
+            }
+            Result.success(Unit)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
+
+    suspend fun pullBillsForShop(shopId: String): Pair<List<BillEntity>, List<BillItemEntity>> = withContext(Dispatchers.IO) {
+        try {
+            val billsSql = """
+                SELECT id, shop_id, bill_number, subtotal, discount, tax, total, payment_method,
+                       (EXTRACT(EPOCH FROM created_at) * 1000)::bigint as created_at_ms
+                FROM bills
+                WHERE shop_id = $1
+                ORDER BY created_at DESC;
+            """.trimIndent()
+            val billsRes = executeQuery(billsSql, listOf(shopId))
+            val billRows = billsRes.optJSONArray("rows") ?: return@withContext Pair(emptyList(), emptyList())
+            val bills = mutableListOf<BillEntity>()
+            for (i in 0 until billRows.length()) {
+                val row = billRows.getJSONObject(i)
+                bills.add(
+                    BillEntity(
+                        id = row.optString("id"),
+                        shopId = row.optString("shop_id", shopId),
+                        billNumber = row.optString("bill_number"),
+                        subtotal = row.optDouble("subtotal", 0.0),
+                        discount = row.optDouble("discount", 0.0),
+                        tax = row.optDouble("tax", 0.0),
+                        total = row.optDouble("total", 0.0),
+                        paymentMethod = row.optString("payment_method", "cash"),
+                        createdAt = row.optLong("created_at_ms", System.currentTimeMillis()),
+                        syncedAt = System.currentTimeMillis()
+                    )
+                )
+            }
+
+            val itemsSql = """
+                SELECT bi.id, bi.bill_id, bi.item_id, bi.name_snapshot, bi.qty, bi.unit_type, bi.unit_price_snapshot, bi.line_total
+                FROM bill_items bi
+                JOIN bills b ON bi.bill_id = b.id
+                WHERE b.shop_id = $1;
+            """.trimIndent()
+            val itemsRes = executeQuery(itemsSql, listOf(shopId))
+            val itemRows = itemsRes.optJSONArray("rows") ?: return@withContext Pair(bills, emptyList())
+            val billItems = mutableListOf<BillItemEntity>()
+            for (i in 0 until itemRows.length()) {
+                val row = itemRows.getJSONObject(i)
+                billItems.add(
+                    BillItemEntity(
+                        id = row.optString("id", UUID.randomUUID().toString()),
+                        billId = row.optString("bill_id"),
+                        itemId = row.optString("item_id"),
+                        nameSnapshot = row.optString("name_snapshot"),
+                        qty = row.optDouble("qty", 1.0),
+                        unitType = row.optString("unit_type", "piece"),
+                        unitPriceSnapshot = row.optDouble("unit_price_snapshot", 0.0),
+                        lineTotal = row.optDouble("line_total", 0.0)
+                    )
+                )
+            }
+            Pair(bills, billItems)
+        } catch (_: Exception) {
+            Pair(emptyList(), emptyList())
         }
     }
 

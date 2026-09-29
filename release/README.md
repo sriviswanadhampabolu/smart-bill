@@ -4,36 +4,31 @@ This folder contains pre-built Android application packages (`.apk`) for **Smart
 
 ---
 
-## 📱 Latest Release: v1.4.0
+## 📱 Latest Release: v1.5.0
 
 | File | Size | Architecture | Target SDK | SHA-256 Checksum |
 | :--- | :--- | :--- | :--- | :--- |
-| **[`SmartBill-v1.4.0.apk`](./SmartBill-v1.4.0.apk)** | ~38.4 MB | universal (arm64-v8a, armeabi-v7a, x86_64) | Android 15 (API 35) / Min Android 7.0 (API 24) | `2B0ABF4B8719A9DF69DFEDB62AE1C400D00B47F22ECD638231EF8963024C2E86` |
+| **[`SmartBill-v1.5.0.apk`](./SmartBill-v1.5.0.apk)** | ~38.3 MB | universal (arm64-v8a, armeabi-v7a, x86_64) | Android 15 (API 35) / Min Android 7.0 (API 24) | `EDEC239A7AFC404B0C831474635A1893B458FE90D1C76E72E991C3B529918CA0` |
 
 ---
 
-## 🌟 What's New in v1.4.0
+## 🌟 What's New in v1.5.0
 
-- ☁️ **Live Real-Time Neon Cloud PostgreSQL Authentication & Sync**:
-  - Direct real-time cloud registration and counter login with mobile number and 4-digit PIN.
-  - Resolved PostgreSQL `timestamptz` date parsing issue, ensuring shopkeeper credentials persist live to Neon Cloud immediately upon registration.
-  - Strict 4-digit PIN authentication prevents unauthorized store access; incorrect credentials are automatically blocked.
-  - Automatic seamless synchronization for offline-first store records to Neon Cloud upon first successful login.
-- 🔑 **Modern Android Credential Manager Integration**:
-  - One-tap **"Sign in with Google"** / **"Register with Google"** using Android's modern `androidx.credentials` and `com.google.android.libraries.identity.googleid` APIs.
-  - Native bottom-sheet authentication with Google OAuth Web Client ID (`190960573906-i4mlf5kk5k5cnjq4ua6a2b7u2qaprln0.apps.googleusercontent.com`).
-  - Seamless fallback and cancellation handling without crashing or blocking users.
-- ⚡ **Direct Routing to Main Dashboard**:
-  - Automatically routes authenticated merchants directly to the **Main Dashboard** counter view upon successful Google Sign-In.
-- 🎨 **Branded Google Identity Button**:
-  - Modern Outlined Material 3 component with official 4-color Google vector logo, interactive loading feedback, and disabled states during active token exchange.
-- 🛡️ **Enriched Cloud Session & ID Token Processing**:
-  - Secure verification and extraction of claims (`email`, `display_name`, `photo_url`, `id_token`) on both local Room database and FastAPI/Neon cloud backend.
+- 🔒 **Strict Database Registration Checks for Google & Mobile Auth**:
+  - When logging in with Google, the app strictly verifies whether the account is already registered in Neon Cloud database.
+  - If unregistered, the user is blocked from logging in, alerted with a clear message, and automatically redirected to the Register tab with their Google profile prefilled.
+  - On the Register tab, users can register new accounts linked with Google or Mobile, preventing duplicate account creations.
+- ☁️ **Full Neon Cloud Data Sync for Bills & Inventory**:
+  - All completed billing receipts and line items (`bills` and `bill_items`) are directly persisted to Neon PostgreSQL in real time upon sale completion.
+  - Real-time stock decrement updates and threshold changes sync immediately to Neon Cloud.
+- 🔄 **Cross-Device Full Store Data Restore on Login**:
+  - Whenever a merchant logs in on any new device or after reinstall, the entire store profile, product catalog (`items`), and historical bills (`bills` & `bill_items`) are automatically pulled from Neon Cloud into the local database.
 
 ---
 
 ## 📱 Previous Releases
 
+- **[`SmartBill-v1.4.0.apk`](./SmartBill-v1.4.0.apk)** (~38.4 MB)
 - **[`SmartBill-v1.3.0.apk`](./SmartBill-v1.3.0.apk)** (~37.4 MB)
 
 - 🔐 **One-Time User Login & Register (Persistent Session)**:
